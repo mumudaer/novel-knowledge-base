@@ -752,7 +752,7 @@ def process_single_chapter_c(
     text = chap["text"]
     safe_text = f"{text[:1200]}\n…省略…\n{text[-1200:]}" if len(text) > 2400 else text
 
-    prompt_c = f"""你是顶尖文学编辑。请深度拆解本章原文的"文风指纹"与"情绪感官映射"，输出纯JSON。
+    prompt_c = f"""你是顶尖文学编辑。请深度拆解本章原文的"文风指纹"、"情绪感官映射"，并【原封不动】摘录经典段落，输出纯JSON。
 【书名】{book_name} 【分类】{category}
 【正文】{safe_text}
 输出JSON：{{
@@ -768,8 +768,15 @@ def process_single_chapter_c(
       "show_not_tell": "原著中展示该情绪的生理反应/动作/环境细节(限50字)",
       "analysis": "为什么这种描写比直接写情绪更有质感(20字内)"
     }}
+  ],
+  "classic_excerpts": [
+    {{
+      "excerpt_text": "从原文中原封不动地摘录 1 段最能代表该作者文风的完整段落（200-400字）。必须是原汁原味的原文，禁止修改任何字词！优先选择精彩的战斗、环境烘托或情绪爆发段落。",
+      "scene_type": "场景类型(如:战斗/环境/对话/心理)",
+      "style_tag": "风格标签(如:肃杀/幽默/细腻/宏大)"
+    }}
   ]
-}} (如果没有明显特征或情绪，对应数组留空，禁止使用反引号)"""
+}} (如果没有明显特征或情绪，对应数组留空。classic_excerpts必须严格摘录原文，禁止使用反引号)"""
 
     raw_resp = ollama_chat(prompt_c, 0.3, "C")
     res = safe_parse_json(raw_resp)
@@ -781,6 +788,7 @@ def process_single_chapter_c(
 
     res.setdefault("author_fingerprint", {})
     res.setdefault("sensory_mappings", [])
+    res.setdefault("classic_excerpts", [])
     res.update({"chapter_id": chap["id"], "book_name": book_name, "category": category})
     return res
 
@@ -874,6 +882,10 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
     chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
     skill_collection = chroma_client.get_or_create_collection(name="novel_skills")
     sensory_collection = chroma_client.get_or_create_collection(name="sensory_details")
+    # 🌟 新增：经典文风段落集合 (Few-Shot 典例)
+    excerpts_collection = chroma_client.get_or_create_collection(
+        name="classic_excerpts"
+    )
 
     graph_path = os.path.join(BASE_DIR, "knowledge_graph.graphml")
     graph = nx.DiGraph()
@@ -886,7 +898,14 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
             except Exception:
                 pass
 
-    return db_conn, skill_collection, sensory_collection, graph, graph_path
+    return (
+        db_conn,
+        skill_collection,
+        sensory_collection,
+        excerpts_collection,
+        graph,
+        graph_path,
+    )
 
 
 def insert_knowledge(
@@ -895,9 +914,14 @@ def insert_knowledge(
     stage_c_res: List[Dict],
     db_conn: sqlite3.Connection,
 ):
-    db_conn, skill_collection, sensory_collection, graph, graph_path = (
-        init_database_resource(db_conn)
-    )
+    (
+        db_conn,
+        skill_collection,
+        sensory_collection,
+        excerpts_collection,
+        graph,
+        graph_path,
+    ) = init_database_resource(db_conn)
     cursor = db_conn.cursor()
 
     book, category = "", ""
@@ -1137,9 +1161,49 @@ def insert_knowledge(
                 )
             except Exception as e:
                 print(f"⚠️ ChromaDB sensory 最终批次 upsert 失败: {e}")
+
+        # 🌟 新增：入库经典文风段落 (Few-Shot 典例)
+        e_batch_ids, e_batch_docs, e_batch_metas = [], [], []
+        for item in tqdm(stage_c_res, desc="入库典例"):
+            for exc in item.get("classic_excerpts", []):
+                if exc.get("excerpt_text") and len(exc["excerpt_text"]) > 50:
+                    e_id = hashlib.md5(
+                        f"{book}|{item['chapter_id']}|{exc['excerpt_text'][:50]}".encode()
+                    ).hexdigest()
+
+                    e_batch_ids.append(e_id)
+                    e_batch_docs.append(exc["excerpt_text"])
+                    e_batch_metas.append(
+                        {
+                            "book_name": book,
+                            "category": category,
+                            "chapter": item["chapter_id"],
+                            "scene_type": exc.get("scene_type", "未知"),
+                            "style_tag": exc.get("style_tag", "未知"),
+                        }
+                    )
+
+                    if len(e_batch_ids) >= CHROMA_BATCH_SIZE:
+                        try:
+                            excerpts_collection.upsert(
+                                ids=e_batch_ids,
+                                documents=e_batch_docs,
+                                metadatas=e_batch_metas,
+                            )
+                        except Exception as e:
+                            print(f"⚠️ ChromaDB excerpts upsert 失败: {e}")
+                        e_batch_ids, e_batch_docs, e_batch_metas = [], [], []
+
+        if e_batch_ids:
+            try:
+                excerpts_collection.upsert(
+                    ids=e_batch_ids, documents=e_batch_docs, metadatas=e_batch_metas
+                )
+            except Exception as e:
+                print(f"⚠️ ChromaDB excerpts 最终批次 upsert 失败: {e}")
         db_conn.commit()
 
-    del skill_collection, sensory_collection
+    del skill_collection, sensory_collection, excerpts_collection
     gc.collect()
 
     sanitize_graph_for_graphml(graph)
