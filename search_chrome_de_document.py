@@ -6,7 +6,7 @@ client = chromadb.PersistentClient(path="./novel_kb/chroma_db")
 collection = client.get_collection("classic_excerpts")  # 这是您存储典例的集合
 
 # 方法一：查看前 5 个典例
-results = collection.peek(limit=5)
+results = collection.peek(limit=100)
 for i in range(len(results["ids"])):
     print(f"\n{'='*50}")
     print(f"【典例 #{i+1}】ID: {results['ids'][i]}")

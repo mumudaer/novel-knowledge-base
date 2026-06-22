@@ -1,0 +1,26 @@
+=== 干掉万人迷的一百种方法 ===
+Traceback (most recent call last):
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1568, in main
+    process_single_book(book_info, manifest, db_conn)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1508, in process_single_book
+    insert_knowledge(stage_a_res, stage_b_res, stage_c_res, db_conn)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1220, in insert_knowledge
+    "||".join(fp.get("signature_transitions", [])),
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: sequence item 3: expected str instance, dict found
+
+=== 替身的我跟正主在一起了 ===
+Traceback (most recent call last):
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1568, in main
+    process_single_book(book_info, manifest, db_conn)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1508, in process_single_book
+    insert_knowledge(stage_a_res, stage_b_res, stage_c_res, db_conn)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkFish\Novel-Knowledge-Base\novel_analyzer.py", line 1116, in insert_knowledge
+    skill["analysis"],
+    ~~~~~^^^^^^^^^^^^
+KeyError: 'analysis'
+

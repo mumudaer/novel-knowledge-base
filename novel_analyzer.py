@@ -16,6 +16,7 @@ import chromadb
 import networkx as nx
 import requests
 import json_repair
+import logging
 from requests.adapters import HTTPAdapter
 from thefuzz import fuzz
 from tqdm import tqdm
@@ -29,15 +30,17 @@ STAGE_BC_MODEL = "qwen14b:latest"
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
-# 【硬件优化1】并发数从 4 降到 2。14B模型+8K上下文在16G显存下跑4并发必OOM。2并发最稳。
+# 3. 【保命修改】并发数死死锁在 1 或 2！
+# 你的物理内存只有 16G，如果设为 2，Ollama 会同时处理 2 个 8K 上下文，内存必爆！
+# 建议设为 1（最稳，绝对不会用虚拟内存，速度反而最快），如果不怕偶尔卡顿可以设为 2。
 STAGE_BC_WORKERS = int(os.getenv("STAGE_BC_WORKERS", 2))
 
 MATCH_THRESHOLD = 85
 # 【硬件优化2】ChromaDB 批量写入从 100 降到 50，大幅降低内存峰值，防止16G内存爆掉
 CHROMA_BATCH_SIZE = 50
 SPLIT_THRESHOLD = 3500
-# 【硬件优化3】上下文从 8192 降到 4096。14B模型跑8K上下文极吃显存，4K对小说章节分析足够
-OLLAMA_NUM_CTX = 4096
+# 14B模型跑8K上下文大约占用 10.5G 显存，你的 16G 显卡完全吃得消，且能完美吞下 3500 字的切块+Prompt！
+OLLAMA_NUM_CTX = 8192
 OLLAMA_NUM_PREDICT = 2048
 OLLAMA_TIMEOUT = 600
 SQL_COMMIT_CHUNK = 5000
@@ -52,10 +55,9 @@ GLOBAL_SESSION.mount("https://", HTTP_ADAPTER)
 
 # 【硬件优化4】强制设置 Ollama 环境变量，防止用户忘记设置
 if os.environ.get("OLLAMA_NUM_PARALLEL") is None:
-    os.environ["OLLAMA_NUM_PARALLEL"] = "2"  # 强制限制为2
+    os.environ["OLLAMA_NUM_PARALLEL"] = "2"
     print("\n" + "=" * 50)
-    print("⚠️ 检测到 16G 显存，已自动将 OLLAMA_NUM_PARALLEL 限制为 2！")
-    print("（若设为4会导致14B模型显存溢出，请求卡死）")
+    print("🚀 已开启 OLLAMA_NUM_PARALLEL = 2，压榨 16G 显存双并发性能！")
     print("=" * 50 + "\n")
 
 # 限制 PyTorch/Ollama 抢占过多 CPU 线程，给系统留点余量
@@ -371,6 +373,115 @@ def ollama_chat(prompt: str, temperature: float = 0.2, stage: str = "A") -> str:
                 time.sleep(sleep_time)
 
 
+# ===================== 全局日志系统配置 =====================
+# 1. 主日志：双通道输出（同时打印到控制台 + 写入 pipeline_run.log 文件）
+main_log_path = os.path.join(BASE_DIR, "pipeline_run.log")
+
+# 清除之前可能存在的默认 handler，防止日志重复打印
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(
+            main_log_path, encoding="utf-8", mode="a"
+        ),  # 追加写入主日志文件
+        logging.StreamHandler(sys.stdout),  # 同步输出到控制台
+    ],
+)
+# 🌟 定义全局主 logger，这就是 insert_knowledge 里用的那个！
+logger = logging.getLogger("NovelPipeline")
+
+# 2. 切分错误专用日志（独立文件，只记录警告，不干扰主日志）
+split_error_log_path = os.path.join(BASE_DIR, "split_error.log")
+split_logger = logging.getLogger("SplitError")
+split_logger.setLevel(logging.WARNING)
+split_logger.propagate = False  # 阻止它向上传递，防止在控制台重复打印
+split_logger.addHandler(
+    logging.FileHandler(split_error_log_path, encoding="utf-8", mode="a")
+)
+
+
+def smart_split_chapters(text, book_name="未知书籍", max_chunk=3500):
+    """
+    平滑记录版章节切分引擎：
+    1. 精准识别，大章分块，无章硬切。
+    2. 遇到丢失率超 5% 的情况，不中断程序，而是写入日志放行。
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    original_length = len(text.replace("\n", "").replace(" ", ""))
+
+    # 1. 强特征正则：只匹配明确的章节标题
+    strong_pattern = r"(?:^|\n+)\s*((?:第[零一二三四五六七八九十百千万两\d\-]+[章节回卷集部篇].{0,30})|(?:[Cc]hapter\s*\d+.{0,30}))\s*(?:\n+|$)"
+
+    parts = re.split(strong_pattern, text)
+
+    chapters = []
+    if parts[0].strip():
+        chapters.append({"title": "序言/前言", "content": parts[0].strip()})
+
+    for i in range(1, len(parts), 2):
+        title = parts[i].strip()
+        content = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        if title:
+            chapters.append({"title": title, "content": content})
+
+    # 2. 没章硬切
+    if len(chapters) <= 1 and len(text) > max_chunk:
+        chapters = [
+            {"title": f"自动分块_{idx+1}", "content": text[i : i + max_chunk]}
+            for idx, i in enumerate(range(0, len(text), max_chunk))
+        ]
+    elif not chapters:
+        chapters = [{"title": "全篇", "content": text}]
+
+    # 3. 大章切碎
+    final_chapters = []
+    for ch in chapters:
+        content_len = len(ch["content"])
+        if content_len > max_chunk:
+            num_chunks = (content_len + max_chunk - 1) // max_chunk
+            for idx in range(num_chunks):
+                start_idx = idx * max_chunk
+                end_idx = min(start_idx + max_chunk, content_len)
+
+                if "分块" in ch["title"] or ch["title"] in ["序言/前言", "全篇"]:
+                    new_title = f"{ch['title']}_{idx+1}"
+                else:
+                    new_title = f"{ch['title']}_分块{idx+1}"
+
+                final_chapters.append(
+                    {"title": new_title, "content": ch["content"][start_idx:end_idx]}
+                )
+        else:
+            final_chapters.append(ch)
+
+    # 4. 📝 平滑日志记录：字数守恒检查（不阻断程序）
+    split_text_combined = "".join(
+        [ch["title"] + ch["content"] for ch in final_chapters]
+    )
+    split_length = len(split_text_combined.replace("\n", "").replace(" ", ""))
+
+    loss_rate = (
+        (original_length - split_length) / original_length if original_length > 0 else 0
+    )
+
+    if loss_rate > 0.05:
+        # 超过 5% 丢失率，记录到日志文件，并在控制台打印黄色警告，但【不报错、不停止】
+        warn_msg = f"⚠️ 文本丢失警告: 《{book_name}》 丢失了 {loss_rate:.2%} (原始: {original_length}字, 切分后: {split_length}字)"
+        split_logger.warning(warn_msg)
+        print(f"\033[93m{warn_msg} (已记入 split_error.log)\033[0m")  # 控制台显示黄色
+    else:
+        print(
+            f"✅ 切分校验通过：《{book_name}》 共 {len(final_chapters)} 块，完整度 {1 - loss_rate:.2%}"
+        )
+
+    return final_chapters
+
+
 def load_chapters_from_txt(
     txt_path: str, book_name: str, category: str, split_threshold=3500
 ) -> List[Dict]:
@@ -394,11 +505,8 @@ def load_chapters_from_txt(
                 with open(txt_path, "rb") as f:
                     full_text = f.read().decode("latin-1", errors="ignore")
 
-    chapter_reg = re.compile(
-        r"(^(?:第[一二三四五六七八九十百千零\d\.]+[章节卷节回]|[Cc]hapter\s*\d+[:\.]?\s*[^\n]*|\d{1,3}[.．、]\s*[^\n]*)\n)",
-        re.MULTILINE,
-    )
-    split_parts = chapter_reg.split(full_text)
+        # 调用万能切分引擎
+    raw_chapters = smart_split_chapters(full_text, book_name, max_chunk=split_threshold)
 
     del full_text
     try:
@@ -406,47 +514,12 @@ def load_chapters_from_txt(
     except Exception:
         pass
 
-    chapter_list, clean_parts = [], [p for p in split_parts if p.strip()]
-    if clean_parts and not re.match(
-        r"(第[一二三四五六七八九十百千零\d\.]+[章节卷节回]|[Cc]hapter|\d{1,3}[.．])",
-        clean_parts[0],
-    ):
-        intro = clean_parts.pop(0).strip()
-        if intro:
-            chapter_list.append({"id": "开篇引子", "text": intro, "slice_tag": "full"})
-
-    for i in range(0, len(clean_parts), 2):
-        if i + 1 >= len(clean_parts):
-            break
-        title, text = clean_parts[i].strip(), clean_parts[i + 1].strip()
-        if len(text) <= split_threshold:
-            chapter_list.append({"id": title, "text": text, "slice_tag": "full"})
-        else:
-            mid = len(text) // 2
-            window = text[max(0, mid - 200) : min(len(text), mid + 200)]
-            matches = list(re.finditer(r"[。！？\n]", window))
-            split_idx = (
-                max(0, mid - 200)
-                + min(
-                    matches, key=lambda m: abs((max(0, mid - 200) + m.end()) - mid)
-                ).end()
-                if matches
-                else mid
-            )
-            chapter_list.append(
-                {
-                    "id": f"{title}_上半段",
-                    "text": text[:split_idx],
-                    "slice_tag": "split",
-                }
-            )
-            chapter_list.append(
-                {
-                    "id": f"{title}_下半段",
-                    "text": text[split_idx:],
-                    "slice_tag": "split",
-                }
-            )
+    # 转换为程序后续需要的格式
+    chapter_list = []
+    for ch in raw_chapters:
+        chapter_list.append(
+            {"id": ch["title"], "text": ch["content"], "slice_tag": "full"}
+        )
     return chapter_list
 
 
@@ -508,10 +581,7 @@ def run_stage_a(
                     for i in range(len(w_data))
                 ):
                     for i in range(offset):
-                        emergency_summary = (
-                            chapters[i]["text"][:200]
-                            + "...(前文摘要丢失，此为应急截取)"
-                        )
+                        emergency_summary = "【前文摘要丢失，请仅根据本章内容推断】"
                         chapters[i].setdefault("summary", emergency_summary)
                         chapters[i].setdefault("character_state", {})
                         processed_chaps.append(chapters[i])
@@ -537,12 +607,7 @@ def run_stage_a(
     pbar = tqdm(remaining_chaps, desc="阶段A进度")
 
     for idx, chap in enumerate(pbar):
-        # 配合 OLLAMA_NUM_CTX=4096，文本截取控制在 1400 字左右，留出 prompt 空间
-        chap_text = (
-            chap["text"][:1400] + "\n【截断】"
-            if len(chap["text"]) > 1400
-            else chap["text"]
-        )
+        chap_text = chap["text"]
 
         if consecutive_fails >= 3:
             fallback_state = {
@@ -656,7 +721,7 @@ def process_single_chapter_b(
     chap: Dict, book_name: str, category: str
 ) -> Dict[str, Any]:
     text = chap["text"]
-    safe_text = f"{text[:1000]}\n…省略…\n{text[-1000:]}" if len(text) > 2000 else text
+    safe_text = text
     state_text = compress_state_to_text(chap["character_state"])
 
     prompt_b = f"""你是网文技法分析师。基于原文提取写作模板，输出纯JSON。
@@ -732,6 +797,7 @@ def run_stage_b(chapters: List[Dict], book_name: str, category: str) -> List[Dic
                     log_buffer.append(res["_unmatched_log"])
                 if len(completed_ids) % 10 == 0:
                     save_state_atomic(CACHE_FILE, {"data": success_list})
+                    gc.collect()  # 新增：每10章强制清理一次内存垃圾
             except Exception as e:
                 fail_list.append((chap_id, str(e)))
 
@@ -750,7 +816,7 @@ def process_single_chapter_c(
     chap: Dict, book_name: str, category: str
 ) -> Dict[str, Any]:
     text = chap["text"]
-    safe_text = f"{text[:1200]}\n…省略…\n{text[-1200:]}" if len(text) > 2400 else text
+    safe_text = text
 
     prompt_c = f"""你是顶尖文学编辑。请深度拆解本章原文的"文风指纹"、"情绪感官映射"，并【原封不动】摘录经典段落，输出纯JSON。
 【书名】{book_name} 【分类】{category}
@@ -771,7 +837,7 @@ def process_single_chapter_c(
   ],
   "classic_excerpts": [
     {{
-      "excerpt_text": "从原文中原封不动地摘录 1 段最能代表该作者文风的完整段落（200-400字）。必须是原汁原味的原文，禁止修改任何字词！优先选择精彩的战斗、环境烘托或情绪爆发段落。",
+      "excerpt_text": "从原文中原封不动地摘录 1 段最能代表该作者文风的完整段落（严格控制在300到400字之间，包含标点）。必须是原汁原味的原文，禁止修改任何字词！必须保持句子完整，绝不能在句子中间截断（必须以句号、问号、叹号或省略号结尾）。优先选择包含完整'环境铺垫+动作冲突+情绪反馈'的段落。",
       "scene_type": "场景类型(如:战斗/环境/对话/心理)",
       "style_tag": "风格标签(如:肃杀/幽默/细腻/宏大)"
     }}
@@ -826,6 +892,7 @@ def run_stage_c(chapters: List[Dict], book_name: str, category: str) -> List[Dic
                 completed_ids.add(chap_id)
                 if len(completed_ids) % 10 == 0:
                     save_state_atomic(CACHE_FILE, {"data": success_list})
+                    gc.collect()  # 新增：每10章强制清理一次内存垃圾
             except Exception as e:
                 fail_list.append((chap_id, str(e)))
 
@@ -914,6 +981,7 @@ def insert_knowledge(
     stage_c_res: List[Dict],
     db_conn: sqlite3.Connection,
 ):
+    # 1. 初始化数据库与向量库资源
     (
         db_conn,
         skill_collection,
@@ -924,6 +992,7 @@ def insert_knowledge(
     ) = init_database_resource(db_conn)
     cursor = db_conn.cursor()
 
+    # 2. 提取书名和分类
     book, category = "", ""
     for res_list in [stage_b_res, stage_c_res, stage_a_res]:
         if res_list:
@@ -931,9 +1000,21 @@ def insert_knowledge(
             category = res_list[0].get("category", "未知")
             break
 
-    # 入库 Stage A
+    # 🌟 3. 初始化全局战报计数器
+    stats = {
+        "plot_arcs": 0,
+        "graph_nodes": 0,
+        "skills_db": 0,
+        "skills_chroma": 0,
+        "fingerprints_db": 0,
+        "sensory_db": 0,
+        "sensory_chroma": 0,
+        "excerpts_chroma": 0,
+    }
+
+    # ================= 入库 Stage A (剧情与图谱) =================
     if stage_a_res:
-        print("📥 正在入库剧情脉络与人物图谱...")
+        logger.info("📥 正在入库剧情脉络与人物图谱...")
         existing_plot_ids = set(
             row[0]
             for row in cursor.execute(
@@ -941,22 +1022,26 @@ def insert_knowledge(
             ).fetchall()
         )
         for chap in tqdm(stage_a_res, desc="入库剧情"):
-            if chap["id"] in existing_plot_ids:
-                continue
-            cursor.execute(
-                "INSERT OR REPLACE INTO plot_arcs VALUES (?,?,?,?,?)",
-                (
-                    chap["id"],
-                    book,
-                    category,
-                    chap.get("summary", ""),
-                    json.dumps(chap.get("character_state", {}), ensure_ascii=False),
-                ),
-            )
+            if chap["id"] not in existing_plot_ids:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO plot_arcs VALUES (?,?,?,?,?)",
+                    (
+                        chap["id"],
+                        book,
+                        category,
+                        chap.get("summary", ""),
+                        json.dumps(chap.get("character_state", {}), ensure_ascii=False),
+                    ),
+                )
+                stats["plot_arcs"] += 1
+
+            # 图谱人物节点与边
             for char_name, char_state in chap.get("character_state", {}).items():
                 if char_name in ("_raw", "旁白"):
                     continue
                 char_node = f"char:{char_name}"
+                if not graph.has_node(char_node):
+                    stats["graph_nodes"] += 1
                 graph.add_node(char_node, node_type="character", book_list=book)
                 safe_append_edge_attr(
                     graph,
@@ -965,24 +1050,30 @@ def insert_knowledge(
                     "action",
                     str(char_state)[:50],
                 )
-        db_conn.commit()
 
-    # 统一清洗 chapter_id
+        db_conn.commit()
+        logger.info(
+            f"   ✅ [阶段A战报] 剧情表(plot_arcs)新增: {stats['plot_arcs']} 条 | 图谱新增人物节点: {stats['graph_nodes']} 个"
+        )
+
+    # ================= 入库 Stage B (写作技法) =================
+    # 统一清洗 chapter_id (去除上下半段后缀)
     for item in stage_c_res:
         if "chapter_id" in item:
             item["chapter_id"] = (
                 item["chapter_id"].replace("_上半段", "").replace("_下半段", "")
             )
 
-    # 入库 Stage B
     if stage_b_res:
-        print("📥 正在入库写作技法...")
+        logger.info("📥 正在入库写作技法...")
         existing_skill_ids = set(
             row[0]
             for row in cursor.execute(
                 "SELECT id FROM skills WHERE book_name = ?", (book,)
             ).fetchall()
         )
+
+        # 合并上下半段数据
         merge_map = defaultdict(list)
         for item in stage_b_res:
             pure_id = item["chapter_id"].replace("_上半段", "").replace("_下半段", "")
@@ -1011,6 +1102,8 @@ def insert_knowledge(
                 ).hexdigest()
                 if sid in existing_skill_ids:
                     continue
+
+                # SQLite 入库
                 cursor.execute(
                     "INSERT OR IGNORE INTO skills VALUES (?,?,?,?,?,?,?,?,?)",
                     (
@@ -1025,7 +1118,10 @@ def insert_knowledge(
                         f"|{item['scene_type']}|{category}|{skill['skill_name']}|",
                     ),
                 )
+                stats["skills_db"] += 1
                 db_count += 1
+
+                # ChromaDB 批次准备
                 batch_ids.append(sid)
                 batch_docs.append(
                     f"技法:{skill['skill_name']}\n逻辑:{skill['analysis']}\n示例:{skill['original_example']}"
@@ -1039,6 +1135,7 @@ def insert_knowledge(
                     }
                 )
 
+                # 图谱逻辑
                 scene_node = f"scene:{safe_str(item['scene_type'])}"
                 skill_node = (
                     f"skill:{safe_str(skill['skill_name'])}:{safe_str(category)}"
@@ -1054,18 +1151,23 @@ def insert_knowledge(
                     graph.add_node(skill_node, node_type="skill", book_list=book)
                 safe_append_edge_attr(graph, scene_node, skill_node, "relation", "包含")
 
+                # 批次提交 ChromaDB
                 if len(batch_ids) >= CHROMA_BATCH_SIZE:
                     try:
                         skill_collection.upsert(
                             ids=batch_ids, documents=batch_docs, metadatas=batch_metas
                         )
+                        stats["skills_chroma"] += len(batch_ids)
                     except Exception as e:
-                        print(f"⚠️ ChromaDB upsert 失败: {e}")
+                        logger.error(f"⚠️ ChromaDB skills upsert 失败: {e}")
                     batch_ids, batch_docs, batch_metas = [], [], []
+
+                # 批次提交 SQLite
                 if db_count >= SQL_COMMIT_CHUNK:
                     db_conn.commit()
                     db_count = 0
 
+        # 处理剩余尾批
         if db_count > 0:
             db_conn.commit()
         if batch_ids:
@@ -1073,12 +1175,17 @@ def insert_knowledge(
                 skill_collection.upsert(
                     ids=batch_ids, documents=batch_docs, metadatas=batch_metas
                 )
+                stats["skills_chroma"] += len(batch_ids)
             except Exception as e:
-                print(f"⚠️ ChromaDB 最终批次 upsert 失败: {e}")
+                logger.error(f"⚠️ ChromaDB skills 最终批次 upsert 失败: {e}")
 
-    # 入库 Stage C
+        logger.info(
+            f"   ✅ [阶段B战报] 技法表(skills)新增: {stats['skills_db']} 条 | 向量库(novel_skills)新增: {stats['skills_chroma']} 条"
+        )
+
+    # ================= 入库 Stage C (文风指纹与感官映射) =================
     if stage_c_res:
-        print("📥 正在入库文风指纹与感官映射...")
+        logger.info("📥 正在入库文风指纹与感官映射...")
         existing_fp_ids = set(
             row[0]
             for row in cursor.execute(
@@ -1094,6 +1201,7 @@ def insert_knowledge(
         s_batch_ids, s_batch_docs, s_batch_metas = [], [], []
 
         for item in tqdm(stage_c_res, desc="入库文风"):
+            # 1. 作者指纹入库
             fp = item.get("author_fingerprint", {})
             if any(fp.values()):
                 fp_id = hashlib.md5(
@@ -1112,7 +1220,9 @@ def insert_knowledge(
                             "||".join(fp.get("signature_transitions", [])),
                         ),
                     )
+                    stats["fingerprints_db"] += 1
 
+            # 2. 感官映射入库 (SQLite + ChromaDB)
             for sm in item.get("sensory_mappings", []):
                 if sm.get("show_not_tell"):
                     sm_id = hashlib.md5(
@@ -1132,6 +1242,8 @@ def insert_knowledge(
                             sm.get("analysis", ""),
                         ),
                     )
+                    stats["sensory_db"] += 1
+
                     s_batch_ids.append(sm_id)
                     s_batch_docs.append(
                         f"情绪:{sm['emotion']}\n细节展示:{sm['show_not_tell']}\n分析:{sm.get('analysis', '')}"
@@ -1143,6 +1255,7 @@ def insert_knowledge(
                             "emotion": sm["emotion"],
                         }
                     )
+
                     if len(s_batch_ids) >= CHROMA_BATCH_SIZE:
                         try:
                             sensory_collection.upsert(
@@ -1150,29 +1263,33 @@ def insert_knowledge(
                                 documents=s_batch_docs,
                                 metadatas=s_batch_metas,
                             )
+                            stats["sensory_chroma"] += len(s_batch_ids)
                         except Exception as e:
-                            print(f"⚠️ ChromaDB sensory upsert 失败: {e}")
+                            logger.error(f"⚠️ ChromaDB sensory upsert 失败: {e}")
                         s_batch_ids, s_batch_docs, s_batch_metas = [], [], []
 
+        # 处理感官映射尾批
         if s_batch_ids:
             try:
                 sensory_collection.upsert(
                     ids=s_batch_ids, documents=s_batch_docs, metadatas=s_batch_metas
                 )
+                stats["sensory_chroma"] += len(s_batch_ids)
             except Exception as e:
-                print(f"⚠️ ChromaDB sensory 最终批次 upsert 失败: {e}")
+                logger.error(f"⚠️ ChromaDB sensory 最终批次 upsert 失败: {e}")
 
-        # 🌟 新增：入库经典文风段落 (Few-Shot 典例)
+        # 3. 经典文风段落入库 (Few-Shot 典例)
+        logger.info("📥 正在入库经典文风典例...")
         e_batch_ids, e_batch_docs, e_batch_metas = [], [], []
         for item in tqdm(stage_c_res, desc="入库典例"):
             for exc in item.get("classic_excerpts", []):
-                if exc.get("excerpt_text") and len(exc["excerpt_text"]) > 50:
+                excerpt_text = exc.get("excerpt_text", "")
+                if excerpt_text and len(excerpt_text) > 20:
                     e_id = hashlib.md5(
                         f"{book}|{item['chapter_id']}|{exc['excerpt_text'][:50]}".encode()
                     ).hexdigest()
-
                     e_batch_ids.append(e_id)
-                    e_batch_docs.append(exc["excerpt_text"])
+                    e_batch_docs.append(excerpt_text)
                     e_batch_metas.append(
                         {
                             "book_name": book,
@@ -1190,19 +1307,30 @@ def insert_knowledge(
                                 documents=e_batch_docs,
                                 metadatas=e_batch_metas,
                             )
+                            stats["excerpts_chroma"] += len(e_batch_ids)
                         except Exception as e:
-                            print(f"⚠️ ChromaDB excerpts upsert 失败: {e}")
+                            logger.error(f"⚠️ ChromaDB excerpts upsert 失败: {e}")
                         e_batch_ids, e_batch_docs, e_batch_metas = [], [], []
 
+        # 处理典例尾批
         if e_batch_ids:
             try:
                 excerpts_collection.upsert(
                     ids=e_batch_ids, documents=e_batch_docs, metadatas=e_batch_metas
                 )
+                stats["excerpts_chroma"] += len(e_batch_ids)
             except Exception as e:
-                print(f"⚠️ ChromaDB excerpts 最终批次 upsert 失败: {e}")
-        db_conn.commit()
+                logger.error(f"⚠️ ChromaDB excerpts 最终批次 upsert 失败: {e}")
 
+        db_conn.commit()
+        logger.info(
+            f"   ✅ [阶段C战报] 指纹表(fingerprints)新增: {stats['fingerprints_db']} 条 | 感官表(sensory)新增: {stats['sensory_db']} 条"
+        )
+        logger.info(
+            f"      ↳ 向量库(sensory)新增: {stats['sensory_chroma']} 条 | 向量库(典例excerpts)新增: {stats['excerpts_chroma']} 条"
+        )
+
+    # ================= 清理资源与保存图谱 =================
     del skill_collection, sensory_collection, excerpts_collection
     gc.collect()
 
@@ -1210,33 +1338,91 @@ def insert_knowledge(
     try:
         nx.write_graphml(graph, graph_path)
     except Exception as e:
-        print(f"⚠️ 图谱保存失败: {e}")
-    print("✅ 所有数据入库完成！")
+        logger.error(f"⚠️ 图谱保存失败: {e}")
+
+    # 🌟 最终汇总战报
+    logger.info("")
+    logger.info("=" * 50)
+    logger.info(f"🏆 《{book}》 终极入库战报汇总：")
+    logger.info(
+        f"   📊 SQLite 关系库总计新增: {stats['plot_arcs'] + stats['skills_db'] + stats['fingerprints_db'] + stats['sensory_db']} 条"
+    )
+    logger.info(
+        f"   🧠 ChromaDB 向量库总计新增: {stats['skills_chroma'] + stats['sensory_chroma'] + stats['excerpts_chroma']} 条"
+    )
+    logger.info("=" * 50)
+    logger.info("✅ 所有数据入库完成！")
 
 
 # ===================== 调度与文件处理 =====================
+def clean_book_name(raw_name: str) -> tuple:
+    """
+    🧹 核心修复：从规范的文件名中精准剥离“书名”和“后缀标记”
+    输入: 《老婆孩子热炕头》作者：水千丞[番外]
+    输出: ('老婆孩子热炕头', '[番外]')
+    """
+    # 1. 提取书名号内的内容作为纯净书名
+    match = re.search(r"《(.*?)》", raw_name)
+    if match:
+        pure_book_name = match.group(1).strip()
+    else:
+        # 如果没有书名号，尝试去掉“作者：”及之后的内容
+        pure_book_name = re.split(r"作者[：:]|by\s*", raw_name, flags=re.IGNORECASE)[
+            0
+        ].strip()
+        # 如果还是没切开，就去掉常见的后缀
+        pure_book_name = re.sub(
+            r"\[番外\]|\(番外\)|番外|补车|精校版|未删减", "", pure_book_name
+        ).strip()
+
+    # 2. 提取后缀标记（如 [番外]）
+    suffix_match = re.search(r"(\[番外\]|\[补车\]|\[精校\]|\(番外\))", raw_name)
+    suffix = suffix_match.group(1) if suffix_match else ""
+
+    return pure_book_name, suffix
+
+
 def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
     print(f"🔍 正在扫描小说库：{root_dir}")
-    # 递归查找所有 txt 文件
     all_txt = glob.glob(os.path.join(root_dir, "**", "*.txt"), recursive=True)
 
     book_list = []
     for path in all_txt:
-        # 获取相对路径，用于提取分类
         rel_path = os.path.relpath(path, root_dir)
         parts = rel_path.split(os.sep)
 
-        # 如果文件在子文件夹里，第一级文件夹名作为分类；如果在根目录，则为"未分类"
-        category = parts[0] if len(parts) > 1 else "未分类"
+        # 🚨 核心修复 1：智能提取分类（优先取第二级文件夹，即作者名/合集名）
+        if len(parts) >= 3:
+            # 例如: 作者合集小说 / 东度日（12本） / 文件.txt
+            category = parts[1]
+            # 清洗掉文件夹名里的“（12本）”、“合集”等字眼，保留纯净的作者名
+            category = (
+                re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+            )
+        elif len(parts) == 2:
+            category = parts[0]
+        else:
+            category = "未分类"
 
-        # 每个 txt 文件名作为书名（去掉 .txt 后缀）
-        base_name = os.path.splitext(os.path.basename(path))[0]
+        raw_file_name = os.path.splitext(os.path.basename(path))[0]
+
+        # 🚨 核心修复 2：精准剥离书名和后缀
+        pure_book_name, suffix = clean_book_name(raw_file_name)
+
+        # 如果带有 [番外] 后缀，我们在内部处理时把它追加到书名后面，防止和正文主键冲突
+        # 但在日志和图谱显示时，它依然属于同一本书
+        db_book_name = f"{pure_book_name}{suffix}" if suffix else pure_book_name
 
         book_list.append(
-            {"book_name": base_name, "category": category, "all_files": [path]}
+            {
+                "book_name": db_book_name,  # 用于数据库主键和断点续传
+                "pure_name": pure_book_name,  # 纯净书名，用于大模型 Prompt 提示
+                "category": category,  # 优化后的分类（如：东度日）
+                "all_files": [path],
+            }
         )
 
-    print(f"📊 扫描完成，共发现 {len(book_list)} 本独立小说（每个txt为一本）。")
+    print(f"📊 扫描完成，共发现 {len(book_list)} 本独立小说。")
     return book_list
 
 
@@ -1292,7 +1478,7 @@ def process_single_book(book_info: Dict, manifest: Dict, db_conn: sqlite3.Connec
             db_a = db_b = db_c = 0
 
         if db_a >= total_chapters and db_b >= total_chapters and db_c >= total_chapters:
-            print(f"⏭️ 跳过已完美入库书籍：《{book_name}》")
+            print(f"⏭️ 跳过已完美入库书籍：{book_name}")
             if book_name not in manifest["completed_books"]:
                 manifest["completed_books"].append(book_name)
                 save_manifest(manifest)
