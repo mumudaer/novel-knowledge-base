@@ -405,6 +405,52 @@ split_logger.addHandler(
 )
 
 
+def clean_novel_text(text: str) -> str:
+    """
+    🧹 网文专属文本清洗引擎：剔除杂质，提纯正文，保护大模型注意力
+    """
+    # 1. 统一换行符
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 2. 去除防盗章节特征（大量连续的生僻字、无意义符号、乱码）
+    # 匹配连续 10 个以上的非中文字符、非英文、非数字、非常见标点符号的行
+    text = re.sub(
+        r"^[^\u4e00-\u9fa5a-zA-Z0-9\s\.,;:!?，。；：！？、\n]{10,}$",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+
+    # 3. 剔除“求月票/求订阅/作者的话”等单行废话
+    # 匹配以这些词开头或包含这些词的短行（通常作者的话都是独立成段的）
+    noise_patterns = [
+        r"^[\s ]*(求月票|求订阅|求推荐|求收藏|求打赏|拜求|感谢.*?打赏|感谢.*?万赏).*?$",
+        r"^[\s ]*(PS|ps|Ps|pS)[：:].*?$",
+        r"^[\s ]*(作者的话|作者说|题外话|碎碎念)[：:].*?$",
+        r"^[\s ]*(本章未完|点击下一页继续阅读|最新网址|手机阅读).*?$",
+    ]
+    for pattern in noise_patterns:
+        text = re.sub(pattern, "", text, flags=re.MULTILINE | re.IGNORECASE)
+
+    # 4. 剔除“作者的话”块状区域（通常是 chapter 末尾的一大段）
+    # 匹配“作者的话”或“ps”直到下一个章节标题或文本结尾
+    text = re.sub(
+        r"(?:作者的话|PS|ps)[：:\s]*\n[\s\S]*?(?=(?:第[零一二三四五六七八九十百千万两\d]+[章节回])|$)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # 5. 清理多余空行（将 3 个以上的连续换行符压缩为 2 个）
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # 6. 清理行首行尾的空白字符
+    lines = [line.strip() for line in text.split("\n")]
+    text = "\n".join(lines)
+
+    return text.strip()
+
+
 def smart_split_chapters(text, book_name="未知书籍", max_chunk=3500):
     """
     平滑记录版章节切分引擎：
@@ -505,8 +551,17 @@ def load_chapters_from_txt(
                 with open(txt_path, "rb") as f:
                     full_text = f.read().decode("latin-1", errors="ignore")
 
-        # 调用万能切分引擎
-    raw_chapters = smart_split_chapters(full_text, book_name, max_chunk=split_threshold)
+    # 调用万能切分引擎
+    # raw_chapters = smart_split_chapters(full_text, book_name, max_chunk=split_threshold)
+
+    # 🌟 修改为：先清洗，再切分！
+    pure_text = clean_novel_text(full_text)
+
+    # 如果清洗后文本太短（说明可能是全篇防盗乱码），给个警告
+    if len(pure_text) < 500:
+        print(f"⚠️ 警告：《{book_name}》 清洗后正文不足500字，可能是防盗章节或空文件！")
+
+    raw_chapters = smart_split_chapters(pure_text, book_name, max_chunk=split_threshold)
 
     del full_text
     try:
@@ -818,15 +873,16 @@ def process_single_chapter_c(
     text = chap["text"]
     safe_text = text
 
+    # 【1. 从源头修复】在 Prompt 中明确强调必须是纯字符串数组，禁止嵌套对象
     prompt_c = f"""你是顶尖文学编辑。请深度拆解本章原文的"文风指纹"、"情绪感官映射"，并【原封不动】摘录经典段落，输出纯JSON。
 【书名】{book_name} 【分类】{category}
 【正文】{safe_text}
 输出JSON：{{
   "author_fingerprint": {{
-    "preferred_verbs": ["作者偏爱的特色动词，限5个"],
-    "preferred_adjectives": ["偏爱的特色形容词，限5个"],
-    "environmental_imagery": ["环境描写常用意象，限5个"],
-    "signature_transitions": ["标志性的过渡句或修辞手法，限2个"]
+    "preferred_verbs": ["作者偏爱的特色动词，限5个，必须是纯字符串"],
+    "preferred_adjectives": ["偏爱的特色形容词，限5个，必须是纯字符串"],
+    "environmental_imagery": ["环境描写常用意象，限5个，必须是纯字符串"],
+    "signature_transitions": ["标志性的过渡句或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"]
   }},
   "sensory_mappings": [
     {{
@@ -855,6 +911,28 @@ def process_single_chapter_c(
     res.setdefault("author_fingerprint", {})
     res.setdefault("sensory_mappings", [])
     res.setdefault("classic_excerpts", [])
+
+    # 【2. JSON解析增强】强制清洗 author_fingerprint，过滤非字符串项并安全转换
+    fp = res.get("author_fingerprint", {})
+    if isinstance(fp, dict):
+        for key in [
+            "preferred_verbs",
+            "preferred_adjectives",
+            "environmental_imagery",
+            "signature_transitions",
+        ]:
+            val = fp.get(key, [])
+            if isinstance(val, list):
+                # 过滤掉 dict/list 等复杂类型，只保留基础类型并强制转为 str
+                fp[key] = [
+                    str(v) for v in val if isinstance(v, (str, int, float, bool))
+                ]
+            else:
+                fp[key] = []
+    else:
+        fp = {}
+    res["author_fingerprint"] = fp
+
     res.update({"chapter_id": chap["id"], "book_name": book_name, "category": category})
     return res
 
@@ -980,6 +1058,7 @@ def insert_knowledge(
     stage_b_res: List[Dict],
     stage_c_res: List[Dict],
     db_conn: sqlite3.Connection,
+    author: str = "未知作者",  # 🌟 新增参数
 ):
     # 1. 初始化数据库与向量库资源
     (
@@ -999,6 +1078,9 @@ def insert_knowledge(
             book = res_list[0].get("book_name", "未知")
             category = res_list[0].get("category", "未知")
             break
+
+    # 🌟 新增：确保 author 变量在函数内可用
+    safe_author = author if author else "未知作者"
 
     # 🌟 3. 初始化全局战报计数器
     stats = {
@@ -1076,7 +1158,9 @@ def insert_knowledge(
         # 合并上下半段数据
         merge_map = defaultdict(list)
         for item in stage_b_res:
-            pure_id = item["chapter_id"].replace("_上半段", "").replace("_下半段", "")
+            # 【安全提取】防止大模型返回残缺字典
+            raw_id = item.get("chapter_id", "未知章节")
+            pure_id = raw_id.replace("_上半段", "").replace("_下半段", "")
             item["chapter_id"] = pure_id
             merge_map[pure_id].append(item)
 
@@ -1087,7 +1171,13 @@ def insert_knowledge(
                 s for sl in slices for s in sl.get("narrative_skills", [])
             ]
             base["scene_type"] = (
-                "/".join(set(sl["scene_type"] for sl in slices if sl.get("scene_type")))
+                "/".join(
+                    set(
+                        sl.get("scene_type", "未知")
+                        for sl in slices
+                        if sl.get("scene_type")
+                    )
+                )
                 or "未知"
             )
             if len(slices) > 1:
@@ -1096,9 +1186,28 @@ def insert_knowledge(
 
         batch_ids, batch_docs, batch_metas, db_count = [], [], [], 0
         for item in tqdm(unified_b, desc="入库技法"):
-            for skill in item["narrative_skills"]:
+            # 确保 narrative_skills 是列表，且过滤掉非字典的脏数据
+            skills_list = item.get("narrative_skills", [])
+            if not isinstance(skills_list, list):
+                continue
+
+            for skill in skills_list:
+                if not isinstance(skill, dict):
+                    continue
+
+                # 【安全提取】防止 KeyError，缺失字段用默认值填补
+                s_name = skill.get("skill_name", "未命名技法")
+                s_example = skill.get("original_example", "无示例")
+                s_analysis = skill.get("analysis", "")
+
+                # 兼容大模型把字段名写错的情况（如写成 reason 或 description）
+                if not s_analysis:
+                    s_analysis = skill.get(
+                        "reason", skill.get("description", "大模型未返回分析")
+                    )
+
                 sid = hashlib.md5(
-                    f"{book}|{item['chapter_id']}|{skill['skill_name']}|{skill['original_example']}".encode()
+                    f"{book}|{item['chapter_id']}|{s_name}|{s_example}".encode()
                 ).hexdigest()
                 if sid in existing_skill_ids:
                     continue
@@ -1111,35 +1220,32 @@ def insert_knowledge(
                         book,
                         item["chapter_id"],
                         category,
-                        item["scene_type"],
-                        skill["skill_name"],
-                        skill["analysis"],
-                        skill["original_example"],
-                        f"|{item['scene_type']}|{category}|{skill['skill_name']}|",
+                        item.get("scene_type", "未知"),
+                        s_name,
+                        s_analysis,
+                        s_example,
+                        f"|{item.get('scene_type', '未知')}|{category}|{s_name}|",
                     ),
                 )
                 stats["skills_db"] += 1
                 db_count += 1
 
-                # ChromaDB 批次准备
+                # ChromaDB 批次准备 (同步使用安全提取后的变量)
                 batch_ids.append(sid)
-                batch_docs.append(
-                    f"技法:{skill['skill_name']}\n逻辑:{skill['analysis']}\n示例:{skill['original_example']}"
-                )
+                batch_docs.append(f"技法:{s_name}\n逻辑:{s_analysis}\n示例:{s_example}")
                 batch_metas.append(
                     {
                         "book_name": book,
+                        "author": safe_author,  # 🌟 新增
                         "chapter": item["chapter_id"],
                         "category": category,
-                        "scene": item["scene_type"],
+                        "scene": item.get("scene_type", "未知"),
                     }
                 )
 
                 # 图谱逻辑
-                scene_node = f"scene:{safe_str(item['scene_type'])}"
-                skill_node = (
-                    f"skill:{safe_str(skill['skill_name'])}:{safe_str(category)}"
-                )
+                scene_node = f"scene:{safe_str(item.get('scene_type', '未知'))}"
+                skill_node = f"skill:{safe_str(s_name)}:{safe_str(category)}"
                 graph.add_node(scene_node, node_type="scene")
                 if graph.has_node(skill_node):
                     old_books = safe_str(graph.nodes[skill_node].get("book_list", ""))
@@ -1199,34 +1305,65 @@ def insert_knowledge(
             ).fetchall()
         )
         s_batch_ids, s_batch_docs, s_batch_metas = [], [], []
+        c_db_count = 0  # 【新增】Stage C 的 SQLite 提交计数器
 
         for item in tqdm(stage_c_res, desc="入库文风"):
             # 1. 作者指纹入库
             fp = item.get("author_fingerprint", {})
             if any(fp.values()):
-                fp_id = hashlib.md5(
-                    f"{book}|{item['chapter_id']}|fp".encode()
-                ).hexdigest()
+                # 【安全提取】
+                c_id = item.get("chapter_id", "未知章节")
+                fp_id = hashlib.md5(f"{book}|{c_id}|fp".encode()).hexdigest()
                 if fp_id not in existing_fp_ids:
+                    # 【3. 安全转换 + 过滤非字符串项】构建绝对安全的字符串列表
+                    safe_verbs = [
+                        str(v)
+                        for v in fp.get("preferred_verbs", [])
+                        if isinstance(v, (str, int, float))
+                    ]
+                    safe_adjs = [
+                        str(v)
+                        for v in fp.get("preferred_adjectives", [])
+                        if isinstance(v, (str, int, float))
+                    ]
+                    safe_imgs = [
+                        str(v)
+                        for v in fp.get("environmental_imagery", [])
+                        if isinstance(v, (str, int, float))
+                    ]
+                    safe_trans = [
+                        str(v)
+                        for v in fp.get("signature_transitions", [])
+                        if isinstance(v, (str, int, float))
+                    ]
+
                     cursor.execute(
                         "INSERT OR IGNORE INTO author_fingerprints VALUES (?,?,?,?,?,?,?)",
                         (
                             fp_id,
                             book,
                             category,
-                            ",".join(fp.get("preferred_verbs", [])),
-                            ",".join(fp.get("preferred_adjectives", [])),
-                            ",".join(fp.get("environmental_imagery", [])),
-                            "||".join(fp.get("signature_transitions", [])),
+                            ",".join(safe_verbs),
+                            ",".join(safe_adjs),
+                            ",".join(safe_imgs),
+                            "||".join(safe_trans),
                         ),
                     )
                     stats["fingerprints_db"] += 1
 
             # 2. 感官映射入库 (SQLite + ChromaDB)
             for sm in item.get("sensory_mappings", []):
-                if sm.get("show_not_tell"):
+                if not isinstance(sm, dict):
+                    continue
+
+                # 【安全提取】
+                emotion = sm.get("emotion", "未知情绪")
+                show_detail = sm.get("show_not_tell", "")
+                analysis = sm.get("analysis", "")
+
+                if show_detail:
                     sm_id = hashlib.md5(
-                        f"{book}|{item['chapter_id']}|{sm['emotion']}|{sm['show_not_tell']}".encode()
+                        f"{book}|{c_id}|{emotion}|{show_detail}".encode()
                     ).hexdigest()
                     if sm_id in existing_sm_ids:
                         continue
@@ -1237,22 +1374,23 @@ def insert_knowledge(
                             book,
                             item["chapter_id"],
                             category,
-                            sm["emotion"],
-                            sm["show_not_tell"],
-                            sm.get("analysis", ""),
+                            emotion,
+                            show_detail,
+                            analysis,
                         ),
                     )
                     stats["sensory_db"] += 1
 
                     s_batch_ids.append(sm_id)
                     s_batch_docs.append(
-                        f"情绪:{sm['emotion']}\n细节展示:{sm['show_not_tell']}\n分析:{sm.get('analysis', '')}"
+                        f"情绪:{emotion}\n细节展示:{show_detail}\n分析:{analysis}"
                     )
                     s_batch_metas.append(
                         {
                             "book_name": book,
+                            "author": safe_author,  # 🌟 新增
                             "category": category,
-                            "emotion": sm["emotion"],
+                            "emotion": emotion,
                         }
                     )
 
@@ -1268,6 +1406,12 @@ def insert_knowledge(
                             logger.error(f"⚠️ ChromaDB sensory upsert 失败: {e}")
                         s_batch_ids, s_batch_docs, s_batch_metas = [], [], []
 
+            c_db_count += 1
+            # 【4. 断点续传优化】每 500 条强制提交一次 SQLite，防止中途崩溃导致数据全丢
+            if c_db_count >= SQL_COMMIT_CHUNK:
+                db_conn.commit()
+                c_db_count = 0
+
         # 处理感官映射尾批
         if s_batch_ids:
             try:
@@ -1278,21 +1422,48 @@ def insert_knowledge(
             except Exception as e:
                 logger.error(f"⚠️ ChromaDB sensory 最终批次 upsert 失败: {e}")
 
+        # 【新增】Stage C 最终 SQLite 提交
+        if c_db_count > 0:
+            db_conn.commit()
+
         # 3. 经典文风段落入库 (Few-Shot 典例)
         logger.info("📥 正在入库经典文风典例...")
         e_batch_ids, e_batch_docs, e_batch_metas = [], [], []
         for item in tqdm(stage_c_res, desc="入库典例"):
             for exc in item.get("classic_excerpts", []):
+                if not isinstance(exc, dict):
+                    continue
                 excerpt_text = exc.get("excerpt_text", "")
+
+                # 【新增】乱码拦截：检测 GBK 误读为 UTF-8 产生的典型乱码特征
+                is_garbled = False
+                if excerpt_text:
+                    try:
+                        # 尝试反向编码验证，如果成功说明是乱码
+                        excerpt_text.encode("utf-8").decode("ascii")
+                    except UnicodeDecodeError:
+                        pass
+                    # 检测连续的非CJK、非标点的异常Unicode字符（GBK乱码的典型特征）
+                    garbled_pattern = re.compile(r"(?:[\x80-\xff]{3,}|[À-ÿ]{2,})")
+                    if garbled_pattern.search(excerpt_text):
+                        is_garbled = True
+
+                if is_garbled:
+                    logger.warning(
+                        f"⚠️ 跳过乱码典例: chapter={item.get('chapter_id', '未知')}, text={excerpt_text[:50]}..."
+                    )
+                    continue
+
                 if excerpt_text and len(excerpt_text) > 20:
                     e_id = hashlib.md5(
-                        f"{book}|{item['chapter_id']}|{exc['excerpt_text'][:50]}".encode()
+                        f"{book}|{item['chapter_id']}|{excerpt_text[:50]}".encode()
                     ).hexdigest()
                     e_batch_ids.append(e_id)
                     e_batch_docs.append(excerpt_text)
                     e_batch_metas.append(
                         {
                             "book_name": book,
+                            "author": safe_author,  # 🌟 新增
                             "category": category,
                             "chapter": item["chapter_id"],
                             "scene_type": exc.get("scene_type", "未知"),
@@ -1409,15 +1580,25 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
         # 🚨 核心修复 2：精准剥离书名和后缀
         pure_book_name, suffix = clean_book_name(raw_file_name)
 
+        # 🌟 新增：精准提取作者名 (支持 "作者：xxx" 或 "by xxx")
+        author_match = re.search(
+            r"作者[：:]\s*([^\[\/]+)|by\s+([^\[\/]+)", raw_file_name, re.IGNORECASE
+        )
+        author_name = (
+            (author_match.group(1) or author_match.group(2)).strip()
+            if author_match
+            else "未知作者"
+        )
         # 如果带有 [番外] 后缀，我们在内部处理时把它追加到书名后面，防止和正文主键冲突
         # 但在日志和图谱显示时，它依然属于同一本书
         db_book_name = f"{pure_book_name}{suffix}" if suffix else pure_book_name
 
         book_list.append(
             {
-                "book_name": db_book_name,  # 用于数据库主键和断点续传
-                "pure_name": pure_book_name,  # 纯净书名，用于大模型 Prompt 提示
-                "category": category,  # 优化后的分类（如：东度日）
+                "book_name": db_book_name,
+                "pure_name": pure_book_name,
+                "author": author_name,  # 🌟 新增作者字段
+                "category": category,  # 这里的 category 后续会被阶段A的 inferred_category (如"悬疑修仙") 覆盖
                 "all_files": [path],
             }
         )
@@ -1505,7 +1686,13 @@ def process_single_book(book_info: Dict, manifest: Dict, db_conn: sqlite3.Connec
         stage_b_res = run_stage_b(stage_a_res, book_name, book_info["category"])
         stage_c_res = run_stage_c(stage_a_res, book_name, book_info["category"])
 
-        insert_knowledge(stage_a_res, stage_b_res, stage_c_res, db_conn)
+        insert_knowledge(
+            stage_a_res,
+            stage_b_res,
+            stage_c_res,
+            db_conn,
+            author=book_info.get("author", "未知作者"),
+        )
 
         manifest["completed_books"].append(book_name)
         manifest["current_processing"] = None
