@@ -883,6 +883,8 @@ def process_single_chapter_c(
     "preferred_adjectives": ["偏爱的特色形容词，限5个，必须是纯字符串"],
     "environmental_imagery": ["环境描写常用意象，限5个，必须是纯字符串"],
     "signature_transitions": ["标志性的过渡句或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"],
+    "narrative_perspective": "叙事视角(如:第一人称限制视角/全知上帝视角/多视角切换/意识流，限20字)",
+    "sentence_rhythm": "句式节奏偏好(如:偏爱绵密的长句与从句/冷峻短促的白描/大量使用破折号与省略号，限30字)",
     "negative_prompts": "【重要】总结该作者绝对不会用的词汇、句式，或AI常犯的说教味毛病(如:禁用'然而/不仅如此/眼中闪过一丝'，禁止在章末进行道德总结，限50字)",
   }},
   "sensory_mappings": [
@@ -932,6 +934,10 @@ def process_single_chapter_c(
                 fp[key] = []
     else:
         fp = {}
+
+    # 🌟 安全追加：叙事视角和句式节奏（大模型没返就默认为空）
+    fp["narrative_perspective"] = str(fp.get("narrative_perspective", ""))
+    fp["sentence_rhythm"] = str(fp.get("sentence_rhythm", ""))
     res["author_fingerprint"] = fp
 
     res.update({"chapter_id": chap["id"], "book_name": book_name, "category": category})
@@ -1030,40 +1036,42 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
     chunks = [raw_text[i : i + 5000] for i in range(0, len(raw_text), 5000)]
 
     for idx, chunk in enumerate(tqdm(chunks, desc="解析设定集")):
-        prompt_d = f"""你是顶级的网文世界观架构师与人物塑造大师。请根据本书的实际题材（如：玄幻/都市/言情/科幻/悬疑/历史等），从以下设定集文本中，自适应提取【核心规则与空间拓扑】、【全阵营立体人物档案】以及【历史编年史】。
+        prompt_d = f"""你是顶级的文学世界观架构师与人物塑造大师。请根据本书的实际题材（网文/传统文学/科幻/悬疑/历史/现实主义等），从以下文本中，自适应提取【核心规则与空间拓扑】、【全阵营立体人物档案】以及【历史编年史】。
 【书名】{book_name} 【作者】{author} 【分类】{category}
-【设定集片段】
+【文本片段】
 {chunk}
 
 请输出纯 JSON 格式：
 {{
   "world_settings": [
     {{
-      "module": "设定模块(自适应题材，如:力量体系/科技树/商业规则/社会阶层/地理拓扑/核心资源)",
-      "entity": "具体实体名(如:斗之气三段/筑基期/ABO血型/京圈势力/某项核心科技/某地图区域)",
-      "content": "详细规则、效果、空间分布、【核心限制/代价/获取难度/底层冲突】(100-300字。注：必须体现该设定带来的矛盾冲突或资源争夺)",
+      "module": "设定模块(自适应题材，如:力量体系/科技树/商业规则/社会阶层/伦理禁忌/空间拓扑/时代风貌/核心资源)",
+      "entity": "具体实体名(如:斗之气三段/筑基期/ABO血型/京圈势力/大观园/马孔多/某种时代政策)",
+      "content": "详细规则、空间分布、【核心限制/代价/底层冲突/时代隐喻】(100-300字。注：必须体现该设定带来的矛盾冲突、资源争夺或对人性的压抑)",
       "tags": ["标签1", "标签2"] 
     }}
   ],
   "character_profiles": [
     {{
       "name": "人物名",
-      "role_type": "角色定位(男主/女主/核心配角/重要反派/导师/宿敌/白月光等)",
-      "appearance": "视觉记忆点(自适应题材：如发色/瞳色/疤痕/标志性穿搭/气质/职业装扮，50字内)",
-      "quirks": "标志性口癖/微表情/下意识动作/特殊习惯",
+      "role_type": "角色定位(主角/核心配角/对立面/导师/群像代表等)",
+      "appearance": "视觉记忆点(发色/疤痕/标志性穿搭/气质/职业装扮，50字内)",
+      "quirks": "标志性口癖/微表情/下意识动作/心理防御机制",
       "identity": "身份/职业/阵营/社会阶层",
       "motivation": "核心动机/终极目标/核心欲望",
-      "internal_conflict": "【新增】内心冲突/人物弧光(如:表面冷酷内心缺爱/从苟道到为苍生拔剑的成长轨迹)",
+      "internal_conflict": "内心冲突/人物弧光(如:表面冷酷内心缺爱/从苟道到为苍生拔剑)",
+      "fatal_flaw": "性格缺陷/悲剧根源(如:极度虚荣/傲慢/精神胜利法/执念，导致其走向毁灭或失败的核心弱点)",
+      "symbolism": "象征意义/社会隐喻(如:代表没落贵族/代表资本异化/代表某种时代缩影，限30字)",
       "personality": "性格底色/优缺点/行事底线",
-      "relation_to_mc": "与主角的初始关系",
-      "relations_to_others": "与其他重要配角的社会与情感羁绊(如:利益绑定/情感纠葛/血仇/职场竞争)",
-      "climax_or_fate": "【新增】高光时刻预设/宿命结局(如:为救主角战死/最终成为商界寡头)",
+      "relation_to_mc": "与主角/核心视角的初始关系",
+      "relations_to_others": "与其他重要配角的社会与情感羁绊(利益绑定/伦理纠葛/血仇/职场竞争)",
+      "climax_or_fate": "高光时刻预设/宿命结局(如:为救主角战死/最终走向疯癫/成为商界寡头)",
       "background": "前史/背景故事/原生家庭影响"
     }}
   ],
   "world_timeline": [
     {{
-      "era_or_year": "纪元或年份(如:混乱纪元/1342年/2077年/主角高三那年)",
+      "era_or_year": "纪元或年份(如:混乱纪元/1342年/2077年/主角高三那年/清末民初)",
       "event_name": "大事件名称",
       "event_description": "事件简述(50字内)",
       "impact": "对当前世界/主角/核心势力的影响(50字内)"
@@ -1071,11 +1079,10 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
   ]
 }}
 (⚠️核心要求：
-1. 必须根据小说实际题材自适应提取！不要在没有修仙设定的现代文里强行提取法宝！
-2. 必须提取设定的【限制与底层冲突】（如：某项技术的缺陷、某种商业操作的法律风险、地图势力的地缘冲突）！
-3. 必须提取人物的【内心冲突/弧光】和【高光/宿命预设】！
-4. 必须尽可能多地提取女主、重要配角和反派！如果片段中没有相关信息，对应数组请留空。
-5. 禁止使用反引号，必须输出合法JSON)"""
+1. 必须根据小说实际题材自适应提取！严肃文学侧重社会阶层/伦理/时代风貌，网文侧重力量体系/商业规则！
+2. 必须提取人物的【性格缺陷(Fatal Flaw)】和【象征意义】！
+3. 必须尽可能多地提取重要配角和对立面！如果片段中没有相关信息，对应数组请留空。
+4. 禁止使用反引号，必须输出合法JSON)"""
 
         try:
             resp = ollama_chat(prompt_d, 0.1, "A")
@@ -1110,8 +1117,9 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
                             "quirks": cp.get("quirks", ""),
                             "identity": cp.get("identity", ""),
                             "motivation": cp.get("motivation", ""),
-                            # 🌟 安全追加：内心冲突、高光预设
                             "internal_conflict": cp.get("internal_conflict", ""),
+                            "fatal_flaw": cp.get("fatal_flaw", ""),
+                            "symbolism": cp.get("symbolism", ""),
                             "climax_or_fate": cp.get("climax_or_fate", ""),
                             "personality": cp.get("personality", ""),
                             "relation_to_mc": cp.get("relation_to_mc", "未知"),
@@ -1188,32 +1196,32 @@ def run_stage_e(
         if len(summaries_text) > 4000:
             summaries_text = summaries_text[:4000] + "\n...(截断)"
 
-        prompt_e = f"""你是资深网文主编。根据《{book_name}》({category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲，并盘点本卷【全阵营人物状态变更】与【伏笔悬念】。
+        prompt_e = f"""你是资深文学主编。根据《{book_name}》({category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲，并盘点本卷【全阵营人物状态变更】与【伏笔/意象悬念】。
 【摘要】
 {summaries_text}
 
 输出纯JSON：
 {{
-  "volume_theme": "本卷核心主题",
-  "core_conflict": "核心冲突与反派",
-  "plot_beats": ["节拍1:开局", "节拍2:发展", "节拍3:高潮", "节拍4:尾声"],
-  "character_arc": "主角成长转变",
+  "volume_theme": "本卷核心主题/探讨的哲学或社会问题",
+  "core_conflict": "核心冲突与对立面(人与人/人与社会/人与自我)",
+  "plot_beats": ["节拍1:起势/铺垫", "节拍2:发展/冲突加剧", "节拍3:高潮/爆发", "节拍4:尾声/余韵"],
+  "character_arc": "主角/核心视角的认知跃迁或心理异化",
   "foreshadowing": [
     {{
-      "hook_name": "伏笔/悬念名称(如:神秘的硬币/反派的真实身份)",
-      "action": "挖坑(plant) 或 填坑(resolve)",
-      "description": "伏笔内容简述或填坑方式"
+      "hook_name": "伏笔/悬念/核心意象名称(如:神秘的硬币/反派的真实身份/反复出现的绿光/某种隐喻)",
+      "action": "埋下(plant) 或 回收/呼应(resolve)",
+      "description": "伏笔内容简述或意象呼应方式"
     }}
   ],
   "state_changes": [
     {{
-      "entity_name": "人物名(主角/女主/配角/反派) 或 重要物品名",
-      "change_type": "变更类型(战力升级/受伤残废/获得宝物/关系恶化/关系升温/阵营背叛/死亡退场)",
-      "change_description": "本卷状态变更详述(如:女主为救主角挡刀重伤/配角王林暗中投靠反派/主角晋升序列7)"
+      "entity_name": "人物名(主角/配角/对立面) 或 重要物品/意象名",
+      "change_type": "变更类型(能力跃迁/受伤残废/获得核心资源/关系恶化/关系升温/阵营背叛/心理异化/信仰崩塌/伦理破裂/死亡退场)",
+      "change_description": "本卷状态变更详述(如:女主为救主角挡刀重伤/配角王林暗中投靠反派/主角信仰彻底崩塌走向黑化)"
     }}
   ]
 }}
-(注意：state_changes 必须包含女主和重要配角的动态变化，尤其是关系变化和阵营变动！禁止反引号，如果没有伏笔或状态变更，对应数组留空)"""
+(注意：state_changes 必须包含重要配角的动态变化，尤其是心理异化和伦理关系破裂！禁止反引号，如果没有伏笔或状态变更，对应数组留空)"""
 
         try:
             resp = ollama_chat(prompt_e, 0.2, "A")
@@ -1307,7 +1315,7 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
     TABLE_SCHEMAS = {
         "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT)",
         "plot_arcs": "(chapter_id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary TEXT, character_state_json TEXT)",
-        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT)",
+        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT, narrative_perspective TEXT, sentence_rhythm TEXT)",
         "sensory_mappings": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, emotion TEXT, show_not_tell TEXT, analysis TEXT)",
         "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
         "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, resolved_chapter TEXT)",
@@ -1683,8 +1691,11 @@ def insert_knowledge(
                         item.get("author_fingerprint", {}).get("negative_prompts", "")
                     )
 
+                    safe_perspective = str(fp.get("narrative_perspective", ""))
+                    safe_rhythm = str(fp.get("sentence_rhythm", ""))
+
                     cursor.execute(
-                        "INSERT OR IGNORE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (
                             fp_id,
                             book,
@@ -1694,6 +1705,8 @@ def insert_knowledge(
                             ",".join(safe_imgs),
                             "||".join(safe_trans),
                             safe_neg,
+                            safe_perspective,
+                            safe_rhythm,
                         ),
                     )
                     stats["fingerprints_db"] += 1
@@ -1898,7 +1911,7 @@ def insert_knowledge(
                 f"{cp['book_name']}|{cp['name']}|profile".encode()
             ).hexdigest()
             c_ids.append(c_id)
-            # 🌟 安全扩充：将内心冲突、高光预设拼入文档，原有字段一个不少
+            # 🌟 安全扩充：将悲剧根源、象征意义拼入文档，原有字段一个不少
             c_docs.append(
                 f"定位:{cp.get('role_type', '未知')}\n"
                 f"外貌:{cp.get('appearance', '无')}\n"
@@ -1906,6 +1919,8 @@ def insert_knowledge(
                 f"身份:{cp['identity']}\n"
                 f"动机:{cp['motivation']}\n"
                 f"内心冲突/弧光:{cp.get('internal_conflict', '无')}\n"
+                f"性格缺陷/悲剧根源:{cp.get('fatal_flaw', '无')}\n"
+                f"象征意义/隐喻:{cp.get('symbolism', '无')}\n"
                 f"性格:{cp['personality']}\n"
                 f"与主角关系:{cp.get('relation_to_mc', '未知')}\n"
                 f"与其他配角关系:{cp.get('relations_to_others', '无')}\n"
@@ -1967,7 +1982,7 @@ def insert_knowledge(
     try:
         cursor = db_conn.cursor()
         cursor.execute(
-            "SELECT verbs, adjectives, imagery FROM author_fingerprints WHERE book_name = ?",
+            "SELECT verbs, adjectives, imagery, narrative_perspective, sentence_rhythm FROM author_fingerprints WHERE book_name = ?",
             (book,),
         )
         rows = cursor.fetchall()
@@ -1977,7 +1992,8 @@ def insert_knowledge(
             # 🌟 修复：增加脏词黑名单，过滤掉大模型常返回的无意义占位符
             blacklist = {"无", "未知", "暂无", "没有", "null", "none", "未提供"}
 
-            for v_str, a_str, i_str in rows:
+            all_perspectives, all_rhythms = set(), set()
+            for v_str, a_str, i_str, p_str, r_str in rows:
                 if v_str:
                     all_verbs.update(
                         [
@@ -2002,11 +2018,17 @@ def insert_knowledge(
                             if w.strip() and w.strip() not in blacklist
                         ]
                     )
+                if p_str:
+                    all_perspectives.add(p_str.strip())
+                if r_str:
+                    all_rhythms.add(r_str.strip())
 
             style_dict = {
                 "verbs": list(all_verbs)[:30],
                 "adjectives": list(all_adjs)[:30],
                 "imagery": list(all_imgs)[:30],
+                "perspectives": list(all_perspectives),
+                "rhythms": list(all_rhythms),
             }
 
             style_path = os.path.join(
