@@ -987,7 +987,11 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
     遵循现有架构：只负责提取并返回结构化数据，不直接操作数据库。
     """
     logger.info(f"=== 阶段四：解析外挂设定集 (世界观与人物底色) ({book_name}) ===")
-    result = {"world_settings": [], "character_profiles": []}
+    result = {
+        "world_settings": [],
+        "character_profiles": [],
+        "world_timeline": [],
+    }
 
     # 1. 查找设定集文件
     safe_name = re.sub(r'[\\/*?:"<>|]', "", book_name)
@@ -1025,7 +1029,7 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
     chunks = [raw_text[i : i + 5000] for i in range(0, len(raw_text), 5000)]
 
     for idx, chunk in enumerate(tqdm(chunks, desc="解析设定集")):
-        prompt_d = f"""你是顶级的网文世界观架构师。请从以下设定集文本中，提取【世界观规则】和【核心人物静态底色】。
+        prompt_d = f"""你是顶级的网文世界观架构师。请从以下设定集文本中，提取【世界观规则】、【全阵营人物底色】以及【历史编年史】。
 【书名】{book_name} 【作者】{author} 【分类】{category}
 【设定集片段】
 {chunk}
@@ -1043,14 +1047,24 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
   "character_profiles": [
     {{
       "name": "人物名",
-      "identity": "身份/职业",
+      "role_type": "角色定位(男主/女主/核心配角/重要反派/导师/宿敌)",
+      "identity": "身份/职业/阵营",
       "motivation": "核心动机/终极目标",
-      "personality": "性格底色/优缺点",
+      "personality": "性格底色/优缺点/说话口癖",
+      "relation_to_mc": "与主角的初始关系(如:青梅竹马/生死仇敌/表面恭敬暗中算计)",
       "background": "前史/背景故事"
+    }}
+  ],
+  "world_timeline": [
+    {{
+      "era_or_year": "纪元或年份(如:混乱纪元/1342年)",
+      "event_name": "大事件名称",
+      "event_description": "事件简述(50字内)",
+      "impact": "对当前世界/主角的影响(50字内)"
     }}
   ]
 }}
-(如果片段中没有相关信息，对应数组请留空。禁止使用反引号)"""
+(注意：必须尽可能多地提取女主、重要配角和反派，不要只写主角！如果片段中没有相关信息，对应数组请留空。禁止使用反引号，必须输出合法JSON)"""
 
         try:
             resp = ollama_chat(prompt_d, 0.1, "A")
@@ -1080,10 +1094,24 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
                             "author": author,
                             "category": category,
                             "name": cp.get("name"),
+                            "role_type": cp.get("role_type", "未知"),
                             "identity": cp.get("identity", ""),
                             "motivation": cp.get("motivation", ""),
                             "personality": cp.get("personality", ""),
+                            "relation_to_mc": cp.get("relation_to_mc", "未知"),
                             "background": cp.get("background", ""),
+                        }
+                    )
+            # 🌟 新增：解析编年史
+            for wt in data.get("world_timeline", []):
+                if isinstance(wt, dict) and wt.get("event_name"):
+                    result["world_timeline"].append(
+                        {
+                            "book_name": book_name,
+                            "era_or_year": wt.get("era_or_year", "未知纪元"),
+                            "event_name": wt.get("event_name"),
+                            "event_description": wt.get("event_description", ""),
+                            "impact": wt.get("impact", ""),
                         }
                     )
         except Exception as e:
@@ -1091,7 +1119,7 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
 
     # 📍 Log 标注：阶段 D 战报
     logger.info(
-        f"✅ [阶段D战报] 提取世界观: {len(result['world_settings'])} 条, 人物底色: {len(result['character_profiles'])} 条"
+        f"✅ [阶段D战报] 提取世界观: {len(result['world_settings'])} 条, 人物底色: {len(result['character_profiles'])} 条, 编年史: {len(result['world_timeline'])} 条"
     )
     return result
 
@@ -1102,7 +1130,7 @@ def run_stage_e(
     book_name: str,
     category: str,
     chapters_per_volume: int = 50,
-) -> List[Dict]:
+) -> Dict[str, List[Dict]]:
     """
     🌟 核心补丁：将 Stage A 产出的单章摘要，按固定章节数聚合成宏观卷大纲。
     遵循现有架构：只返回结构化数据列表。
@@ -1110,7 +1138,12 @@ def run_stage_e(
     logger.info(
         f"=== 阶段五：宏观大纲与卷节拍聚合 (每 {chapters_per_volume} 章为一卷) ({book_name}) ==="
     )
-    result = []
+    # 🌟 修改：从返回列表改为返回包含三个列表的字典
+    result = {
+        "macro_outlines": [],
+        "plot_foreshadowing": [],
+        "entity_state_tracker": [],
+    }
 
     if not stage_a_res:
         logger.warning("⚠️ [阶段E] 没有 Stage A 数据，跳过宏观聚合。")
@@ -1138,7 +1171,7 @@ def run_stage_e(
         if len(summaries_text) > 4000:
             summaries_text = summaries_text[:4000] + "\n...(截断)"
 
-        prompt_e = f"""你是资深网文主编。根据《{book_name}》({category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲。
+        prompt_e = f"""你是资深网文主编。根据《{book_name}》({category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲，并盘点本卷【全阵营人物状态变更】与【伏笔悬念】。
 【摘要】
 {summaries_text}
 
@@ -1147,19 +1180,33 @@ def run_stage_e(
   "volume_theme": "本卷核心主题",
   "core_conflict": "核心冲突与反派",
   "plot_beats": ["节拍1:开局", "节拍2:发展", "节拍3:高潮", "节拍4:尾声"],
-  "character_arc": "主角成长转变"
+  "character_arc": "主角成长转变",
+  "foreshadowing": [
+    {{
+      "hook_name": "伏笔/悬念名称(如:神秘的硬币/反派的真实身份)",
+      "action": "挖坑(plant) 或 填坑(resolve)",
+      "description": "伏笔内容简述或填坑方式"
+    }}
+  ],
+  "state_changes": [
+    {{
+      "entity_name": "人物名(主角/女主/配角/反派) 或 重要物品名",
+      "change_type": "变更类型(战力升级/受伤残废/获得宝物/关系恶化/关系升温/阵营背叛/死亡退场)",
+      "change_description": "本卷状态变更详述(如:女主为救主角挡刀重伤/配角王林暗中投靠反派/主角晋升序列7)"
+    }}
+  ]
 }}
-(禁止反引号)"""
+(注意：state_changes 必须包含女主和重要配角的动态变化，尤其是关系变化和阵营变动！禁止反引号，如果没有伏笔或状态变更，对应数组留空)"""
 
         try:
             resp = ollama_chat(prompt_e, 0.2, "A")
             data = safe_parse_json(resp)
             if data and data.get("volume_theme"):
-                # 🌟 修复：强制确保 beats 是一个列表，防止大模型返回 null 导致后续 join 崩溃
                 raw_beats = data.get("plot_beats", [])
                 safe_beats = raw_beats if isinstance(raw_beats, list) else []
 
-                result.append(
+                # 1. 聚合宏观大纲
+                result["macro_outlines"].append(
                     {
                         "book_name": book_name,
                         "category": category,
@@ -1171,11 +1218,64 @@ def run_stage_e(
                         "arc": data.get("character_arc", ""),
                     }
                 )
+
+                # 🌟 2. 提取伏笔追踪
+                for fs in data.get("foreshadowing", []):
+                    if isinstance(fs, dict) and fs.get("hook_name"):
+                        action = fs.get("action", "plant")
+                        status = (
+                            "已填"
+                            if "resolve" in action.lower() or "填" in action
+                            else "未填"
+                        )
+                        result["plot_foreshadowing"].append(
+                            {
+                                "book_name": book_name,
+                                "hook_name": fs["hook_name"],
+                                "planted_chapter": (
+                                    f"{start_chap}-{end_chap}"
+                                    if status == "未填"
+                                    else ""
+                                ),
+                                "planned_payoff": fs.get("description", ""),
+                                "status": status,
+                                "resolved_chapter": (
+                                    f"{start_chap}-{end_chap}"
+                                    if status == "已填"
+                                    else ""
+                                ),
+                            }
+                        )
+
+                # 🌟 3. 提取实体状态快照 (包含配角/女主/物品)
+                for sc in data.get("state_changes", []):
+                    if (
+                        isinstance(sc, dict)
+                        and sc.get("entity_name")
+                        and sc.get("change_description")
+                    ):
+                        result["entity_state_tracker"].append(
+                            {
+                                "book_name": book_name,
+                                "entity_name": sc["entity_name"],
+                                "chapter_range": f"{start_chap}-{end_chap}",
+                                # 🌟 修改：将变更类型和描述合并存入 JSON，方便后续精准检索
+                                "current_state_json": json.dumps(
+                                    {
+                                        "type": sc.get("change_type", "状态变更"),
+                                        "detail": sc["change_description"],
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                            }
+                        )
         except Exception as e:
             logger.warning(f"⚠️ [阶段E] 聚合第 {vol_idx+1} 卷失败: {e}")
 
     # 📍 Log 标注：阶段 E 战报
-    logger.info(f"✅ [阶段E战报] 成功聚合 {len(result)} 个宏观卷大纲。")
+    logger.info(
+        f"✅ [阶段E战报] 聚合卷大纲: {len(result['macro_outlines'])} 卷 | 伏笔追踪: {len(result['plot_foreshadowing'])} 条 | 状态快照: {len(result['entity_state_tracker'])} 条"
+    )
     return result
 
 
@@ -1192,6 +1292,9 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
         "plot_arcs": "(chapter_id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary TEXT, character_state_json TEXT)",
         "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT)",
         "sensory_mappings": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, emotion TEXT, show_not_tell TEXT, analysis TEXT)",
+        "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
+        "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, resolved_chapter TEXT)",
+        "entity_state_tracker": "(id TEXT PRIMARY KEY, book_name TEXT, entity_name TEXT, chapter_range TEXT, current_state_json TEXT)",
     }
     CHAPTER_ID_TABLES = ["skills", "plot_arcs", "sensory_mappings"]
 
@@ -1273,8 +1376,10 @@ def insert_knowledge(
     stage_a_res: List[Dict],
     stage_b_res: List[Dict],
     stage_c_res: List[Dict],
-    stage_d_res: Dict[str, List[Dict]],  # 🌟 新增
-    stage_e_res: List[Dict],  # 🌟 新增
+    stage_d_res: Dict[str, List[Dict]],
+    stage_e_res: Dict[
+        str, List[Dict]
+    ],  # 🌟 修复：从 List[Dict] 改为 Dict[str, List[Dict]]
     db_conn: sqlite3.Connection,
     author: str = "未知作者",
 ):
@@ -1773,7 +1878,7 @@ def insert_knowledge(
             ).hexdigest()
             c_ids.append(c_id)
             c_docs.append(
-                f"身份:{cp['identity']}\n动机:{cp['motivation']}\n性格:{cp['personality']}\n前史:{cp['background']}"
+                f"定位:{cp.get('role_type', '未知')}\n身份:{cp['identity']}\n动机:{cp['motivation']}\n性格:{cp['personality']}\n与主角关系:{cp.get('relation_to_mc', '未知')}\n前史:{cp['background']}"
             )
             c_metas.append(
                 {
@@ -1781,6 +1886,7 @@ def insert_knowledge(
                     "author": cp["author"],
                     "category": cp["category"],
                     "char_name": cp["name"],
+                    "role_type": cp.get("role_type", "未知"),
                     "module": "静态底色",
                 }
             )
@@ -1794,7 +1900,8 @@ def insert_knowledge(
     macro_count = 0
     if stage_e_res:
         m_ids, m_docs, m_metas = [], [], []
-        for m in stage_e_res:
+        # 🌟 修改：从 stage_e_res 改为 stage_e_res.get("macro_outlines", [])
+        for m in stage_e_res.get("macro_outlines", []):
             m_id = hashlib.md5(
                 f"{m['book_name']}|vol_{m['volume_index']}".encode()
             ).hexdigest()
@@ -1883,15 +1990,91 @@ def insert_knowledge(
     except Exception as e:
         logger.debug(f"⚠️ [文风激活] 提取文风指纹时发生预期外情况: {e}")
 
+    # 🌟 ================= 新增：3 张 100% 覆盖补丁表入库 =================
+    patch_stats = {"timeline": 0, "foreshadow": 0, "state": 0}
+
+    # 1. 编年史入库 (Stage D)
+    for wt in stage_d_res.get("world_timeline", []):
+        wt_id = hashlib.md5(
+            f"{wt['book_name']}|{wt['era_or_year']}|{wt['event_name']}".encode()
+        ).hexdigest()
+        try:
+            cursor.execute(
+                "INSERT OR IGNORE INTO world_timeline VALUES (?,?,?,?,?,?)",
+                (
+                    wt_id,
+                    wt["book_name"],
+                    wt["era_or_year"],
+                    wt["event_name"],
+                    wt["event_description"],
+                    wt["impact"],
+                ),
+            )
+            patch_stats["timeline"] += 1
+        except Exception as e:
+            logger.error(f"❌ [入库] 编年史写入失败: {e}")
+
+    # 2. 伏笔追踪入库 (Stage E)
+    for fs in stage_e_res.get("plot_foreshadowing", []):
+        fs_id = hashlib.md5(
+            f"{fs['book_name']}|{fs['hook_name']}|{fs['planted_chapter']}|{fs['resolved_chapter']}".encode()
+        ).hexdigest()
+        try:
+            cursor.execute(
+                "INSERT OR IGNORE INTO plot_foreshadowing VALUES (?,?,?,?,?,?,?)",
+                (
+                    fs_id,
+                    fs["book_name"],
+                    fs["hook_name"],
+                    fs["planted_chapter"],
+                    fs["planned_payoff"],
+                    fs["status"],
+                    fs["resolved_chapter"],
+                ),
+            )
+            patch_stats["foreshadow"] += 1
+        except Exception as e:
+            logger.error(f"❌ [入库] 伏笔追踪写入失败: {e}")
+
+    # 3. 实体状态快照入库 (Stage E)
+    for es in stage_e_res.get("entity_state_tracker", []):
+        es_id = hashlib.md5(
+            f"{es['book_name']}|{es['entity_name']}|{es['chapter_range']}".encode()
+        ).hexdigest()
+        try:
+            cursor.execute(
+                "INSERT OR IGNORE INTO entity_state_tracker VALUES (?,?,?,?,?)",
+                (
+                    es_id,
+                    es["book_name"],
+                    es["entity_name"],
+                    es["chapter_range"],
+                    es.get("current_state_json", ""),
+                ),
+            )
+            patch_stats["state"] += 1
+        except Exception as e:
+            logger.error(f"❌ [入库] 实体状态快照写入失败: {e}")
+
+    db_conn.commit()
+    if sum(patch_stats.values()) > 0:
+        logger.info(
+            f" 🧩 补丁表新增: 编年史 {patch_stats['timeline']} 条 | 伏笔追踪 {patch_stats['foreshadow']} 条 | 状态快照 {patch_stats['state']} 条"
+        )
+
+    # 🌟 新增：显式清理宏观数据字典，释放内存
+    del stage_d_res, stage_e_res
+    gc.collect()
+
     # 🌟 最终汇总战报
     logger.info("")
     logger.info("=" * 50)
     logger.info(f"🏆 《{book}》 终极入库战报汇总：")
     logger.info(
-        f"   📊 SQLite 关系库总计新增: {stats['plot_arcs'] + stats['skills_db'] + stats['fingerprints_db'] + stats['sensory_db']} 条"
+        f" 📊 SQLite 关系库总计新增: {stats['plot_arcs'] + stats['skills_db'] + stats['fingerprints_db'] + stats['sensory_db'] + sum(patch_stats.values())} 条"
     )
     logger.info(
-        f"   🧠 ChromaDB 向量库总计新增: {stats['skills_chroma'] + stats['sensory_chroma'] + stats['excerpts_chroma']} 条"
+        f" 🧠 ChromaDB 向量库总计新增: {stats['skills_chroma'] + stats['sensory_chroma'] + stats['excerpts_chroma']} 条"
     )
     logger.info("=" * 50)
     logger.info("✅ 所有数据入库完成！")
