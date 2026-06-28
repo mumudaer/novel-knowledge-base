@@ -980,6 +980,205 @@ def run_stage_c(chapters: List[Dict], book_name: str, category: str) -> List[Dic
     return success_list
 
 
+# ===================== 阶段 D：宏观设定与人物底色导入 (外挂设定集) =====================
+def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Dict]]:
+    """
+    🌟 核心补丁：读取外挂设定集，提取世界观和人物底色。
+    遵循现有架构：只负责提取并返回结构化数据，不直接操作数据库。
+    """
+    logger.info(f"=== 阶段四：解析外挂设定集 (世界观与人物底色) ({book_name}) ===")
+    result = {"world_settings": [], "character_profiles": []}
+
+    # 1. 查找设定集文件
+    safe_name = re.sub(r'[\\/*?:"<>|]', "", book_name)
+    novel_dir = os.path.join(BASE_DIR, "novels", safe_name)
+    if not os.path.exists(novel_dir):
+        novel_dir = BASE_DIR
+
+    setting_file = None
+    for ext in [".md", ".txt", ".json"]:
+        for prefix in [f"{safe_name}_settings", safe_name]:
+            path = os.path.join(novel_dir, f"{prefix}{ext}")
+            if os.path.exists(path):
+                setting_file = path
+                break
+        if setting_file:
+            break
+
+    if not setting_file:
+        logger.info(f"ℹ️ [阶段D] 未找到《{book_name}》的外挂设定集，跳过宏观解析。")
+        return result
+
+    logger.info(f"📖 [阶段D] 发现设定集: {os.path.basename(setting_file)}，开始解析...")
+    try:
+        with open(setting_file, "r", encoding="utf-8") as f:
+            raw_text = f.read()
+    except Exception as e:
+        logger.error(f"❌ [阶段D] 读取设定集失败: {e}")
+        return result
+
+    if len(raw_text) < 100:
+        logger.warning("⚠️ 设定集内容过短，跳过解析。")
+        return result
+
+    # 2. 文本分块
+    chunks = [raw_text[i : i + 5000] for i in range(0, len(raw_text), 5000)]
+
+    for idx, chunk in enumerate(tqdm(chunks, desc="解析设定集")):
+        prompt_d = f"""你是顶级的网文世界观架构师。请从以下设定集文本中，提取【世界观规则】和【核心人物静态底色】。
+【书名】{book_name} 【作者】{author} 【分类】{category}
+【设定集片段】
+{chunk}
+
+请输出纯 JSON 格式：
+{{
+  "world_settings": [
+    {{
+      "module": "模块名(如:力量体系/阵营势力/地理生态/经济规则/历史悬念)",
+      "entity": "具体实体名(如:占卜家途径/精灵王庭/灵石货币)",
+      "content": "详细的规则、设定、运作逻辑或历史背景(100-300字)",
+      "tags": ["标签1", "标签2"] 
+    }}
+  ],
+  "character_profiles": [
+    {{
+      "name": "人物名",
+      "identity": "身份/职业",
+      "motivation": "核心动机/终极目标",
+      "personality": "性格底色/优缺点",
+      "background": "前史/背景故事"
+    }}
+  ]
+}}
+(如果片段中没有相关信息，对应数组请留空。禁止使用反引号)"""
+
+        try:
+            resp = ollama_chat(prompt_d, 0.1, "A")
+            data = safe_parse_json(resp)
+            if not data:
+                continue
+
+            for ws in data.get("world_settings", []):
+                if isinstance(ws, dict) and ws.get("content"):
+                    result["world_settings"].append(
+                        {
+                            "book_name": book_name,
+                            "author": author,
+                            "category": category,
+                            "module": ws.get("module", "未知"),
+                            "entity": ws.get("entity", "未知"),
+                            "content": ws.get("content"),
+                            "tags": ws.get("tags", []),
+                        }
+                    )
+
+            for cp in data.get("character_profiles", []):
+                if isinstance(cp, dict) and cp.get("name"):
+                    result["character_profiles"].append(
+                        {
+                            "book_name": book_name,
+                            "author": author,
+                            "category": category,
+                            "name": cp.get("name"),
+                            "identity": cp.get("identity", ""),
+                            "motivation": cp.get("motivation", ""),
+                            "personality": cp.get("personality", ""),
+                            "background": cp.get("background", ""),
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"⚠️ [阶段D] 解析分块 {idx} 失败: {e}")
+
+    # 📍 Log 标注：阶段 D 战报
+    logger.info(
+        f"✅ [阶段D战报] 提取世界观: {len(result['world_settings'])} 条, 人物底色: {len(result['character_profiles'])} 条"
+    )
+    return result
+
+
+# ===================== 阶段 E：宏观大纲与卷节拍聚合 =====================
+def run_stage_e(
+    stage_a_res: List[Dict],
+    book_name: str,
+    category: str,
+    chapters_per_volume: int = 50,
+) -> List[Dict]:
+    """
+    🌟 核心补丁：将 Stage A 产出的单章摘要，按固定章节数聚合成宏观卷大纲。
+    遵循现有架构：只返回结构化数据列表。
+    """
+    logger.info(
+        f"=== 阶段五：宏观大纲与卷节拍聚合 (每 {chapters_per_volume} 章为一卷) ({book_name}) ==="
+    )
+    result = []
+
+    if not stage_a_res:
+        logger.warning("⚠️ [阶段E] 没有 Stage A 数据，跳过宏观聚合。")
+        return result
+
+    volumes = [
+        stage_a_res[i : i + chapters_per_volume]
+        for i in range(0, len(stage_a_res), chapters_per_volume)
+    ]
+    logger.info(
+        f"📚 [阶段E] 共 {len(stage_a_res)} 章，将聚合为 {len(volumes)} 个宏观卷大纲。"
+    )
+
+    for vol_idx, vol_chapters in enumerate(tqdm(volumes, desc="聚合卷大纲")):
+        start_chap = vol_idx * chapters_per_volume + 1
+        end_chap = (vol_idx + 1) * chapters_per_volume
+
+        summaries_text = "\n".join(
+            [
+                f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
+                for ch in vol_chapters
+            ]
+        )
+
+        if len(summaries_text) > 4000:
+            summaries_text = summaries_text[:4000] + "\n...(截断)"
+
+        prompt_e = f"""你是资深网文主编。根据《{book_name}》({category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲。
+【摘要】
+{summaries_text}
+
+输出纯JSON：
+{{
+  "volume_theme": "本卷核心主题",
+  "core_conflict": "核心冲突与反派",
+  "plot_beats": ["节拍1:开局", "节拍2:发展", "节拍3:高潮", "节拍4:尾声"],
+  "character_arc": "主角成长转变"
+}}
+(禁止反引号)"""
+
+        try:
+            resp = ollama_chat(prompt_e, 0.2, "A")
+            data = safe_parse_json(resp)
+            if data and data.get("volume_theme"):
+                # 🌟 修复：强制确保 beats 是一个列表，防止大模型返回 null 导致后续 join 崩溃
+                raw_beats = data.get("plot_beats", [])
+                safe_beats = raw_beats if isinstance(raw_beats, list) else []
+
+                result.append(
+                    {
+                        "book_name": book_name,
+                        "category": category,
+                        "volume_index": vol_idx + 1,
+                        "chapter_range": f"{start_chap}-{end_chap}",
+                        "theme": data.get("volume_theme"),
+                        "conflict": data.get("core_conflict", ""),
+                        "beats": safe_beats,
+                        "arc": data.get("character_arc", ""),
+                    }
+                )
+        except Exception as e:
+            logger.warning(f"⚠️ [阶段E] 聚合第 {vol_idx+1} 卷失败: {e}")
+
+    # 📍 Log 标注：阶段 E 战报
+    logger.info(f"✅ [阶段E战报] 成功聚合 {len(result)} 个宏观卷大纲。")
+    return result
+
+
 # ===================== 数据库与入库逻辑 =====================
 def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
     if db_conn is None:
@@ -1032,6 +1231,20 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
         name="classic_excerpts"
     )
 
+    # --- 🌟 宏观设定集合 (新增：用于解决世界观/人物/大纲缺陷) ---
+    # 1. 世界观矩阵 (力量体系/阵营/规则)
+    world_settings_collection = chroma_client.get_or_create_collection(
+        name="world_settings_kb"
+    )
+    # 2. 人物静态底色 (前史/动机/性格)
+    character_profiles_collection = chroma_client.get_or_create_collection(
+        name="character_profiles_kb"
+    )
+    # 3. 宏观卷大纲 (剧情节拍/卷结构)
+    macro_outlines_collection = chroma_client.get_or_create_collection(
+        name="macro_outlines_kb"
+    )
+
     graph_path = os.path.join(BASE_DIR, "knowledge_graph.graphml")
     graph = nx.DiGraph()
     if os.path.exists(graph_path):
@@ -1048,6 +1261,9 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
         skill_collection,
         sensory_collection,
         excerpts_collection,
+        world_settings_collection,  # 🌟 新增
+        character_profiles_collection,  # 🌟 新增
+        macro_outlines_collection,  # 🌟 新增
         graph,
         graph_path,
     )
@@ -1057,8 +1273,10 @@ def insert_knowledge(
     stage_a_res: List[Dict],
     stage_b_res: List[Dict],
     stage_c_res: List[Dict],
+    stage_d_res: Dict[str, List[Dict]],  # 🌟 新增
+    stage_e_res: List[Dict],  # 🌟 新增
     db_conn: sqlite3.Connection,
-    author: str = "未知作者",  # 🌟 新增参数
+    author: str = "未知作者",
 ):
     # 1. 初始化数据库与向量库资源
     (
@@ -1066,6 +1284,9 @@ def insert_knowledge(
         skill_collection,
         sensory_collection,
         excerpts_collection,
+        world_collection,
+        char_collection,
+        macro_collection,
         graph,
         graph_path,
     ) = init_database_resource(db_conn)
@@ -1503,6 +1724,7 @@ def insert_knowledge(
 
     # ================= 清理资源与保存图谱 =================
     del skill_collection, sensory_collection, excerpts_collection
+    del world_collection, char_collection, macro_collection
     gc.collect()
 
     sanitize_graph_for_graphml(graph)
@@ -1510,6 +1732,156 @@ def insert_knowledge(
         nx.write_graphml(graph, graph_path)
     except Exception as e:
         logger.error(f"⚠️ 图谱保存失败: {e}")
+
+    # ===================== 🌟 统一收口：宏观数据入库与文风激活 =====================
+
+    # 1. 写入世界观矩阵 (Stage D)
+    world_count = 0
+    if stage_d_res.get("world_settings"):
+        w_ids, w_docs, w_metas = [], [], []
+        for ws in stage_d_res["world_settings"]:
+            w_id = hashlib.md5(
+                f"{ws['book_name']}|{ws['module']}|{ws['entity']}".encode()
+            ).hexdigest()
+            w_ids.append(w_id)
+            w_docs.append(
+                f"模块:{ws['module']}\n实体:{ws['entity']}\n设定:{ws['content']}"
+            )
+            w_metas.append(
+                {
+                    "book_name": ws["book_name"],
+                    "author": ws["author"],
+                    "category": ws["category"],
+                    "module": ws["module"],
+                    "entity": ws["entity"],
+                    "tags": "|".join(ws["tags"]),
+                }
+            )
+        try:
+            world_collection.upsert(ids=w_ids, documents=w_docs, metadatas=w_metas)
+            world_count = len(w_ids)
+        except Exception as e:
+            logger.error(f"❌ [入库] 世界观写入失败: {e}")
+
+    # 2. 写入人物静态底色 (Stage D)
+    char_count = 0
+    if stage_d_res.get("character_profiles"):
+        c_ids, c_docs, c_metas = [], [], []
+        for cp in stage_d_res["character_profiles"]:
+            c_id = hashlib.md5(
+                f"{cp['book_name']}|{cp['name']}|profile".encode()
+            ).hexdigest()
+            c_ids.append(c_id)
+            c_docs.append(
+                f"身份:{cp['identity']}\n动机:{cp['motivation']}\n性格:{cp['personality']}\n前史:{cp['background']}"
+            )
+            c_metas.append(
+                {
+                    "book_name": cp["book_name"],
+                    "author": cp["author"],
+                    "category": cp["category"],
+                    "char_name": cp["name"],
+                    "module": "静态底色",
+                }
+            )
+        try:
+            char_collection.upsert(ids=c_ids, documents=c_docs, metadatas=c_metas)
+            char_count = len(c_ids)
+        except Exception as e:
+            logger.error(f"❌ [入库] 人物底色写入失败: {e}")
+
+    # 3. 写入宏观卷大纲 (Stage E)
+    macro_count = 0
+    if stage_e_res:
+        m_ids, m_docs, m_metas = [], [], []
+        for m in stage_e_res:
+            m_id = hashlib.md5(
+                f"{m['book_name']}|vol_{m['volume_index']}".encode()
+            ).hexdigest()
+            m_ids.append(m_id)
+            beats_str = "\n".join([f"- {b}" for b in m["beats"]])
+            m_docs.append(
+                f"卷主题:{m['theme']}\n冲突:{m['conflict']}\n弧光:{m['arc']}\n节拍:\n{beats_str}"
+            )
+            m_metas.append(
+                {
+                    "book_name": m["book_name"],
+                    "category": m["category"],
+                    "volume_index": m["volume_index"],
+                    "chapter_range": m["chapter_range"],
+                    "module": "宏观卷大纲",
+                }
+            )
+        try:
+            macro_collection.upsert(ids=m_ids, documents=m_docs, metadatas=m_metas)
+            macro_count = len(m_ids)
+        except Exception as e:
+            logger.error(f"❌ [入库] 宏观大纲写入失败: {e}")
+
+    # 📍 Log 标注：宏观数据入库战报
+    if world_count + char_count + macro_count > 0:
+        logger.info(
+            f" 🌌 宏观知识库新增: 世界观 {world_count} 条 | 人物底色 {char_count} 条 | 卷大纲 {macro_count} 卷"
+        )
+
+    # 4. 激活正文文风指纹 (从 SQLite 提取并聚合为本地 JSON)
+    try:
+        cursor = db_conn.cursor()
+        cursor.execute(
+            "SELECT verbs, adjectives, imagery FROM author_fingerprints WHERE book_name = ?",
+            (book,),
+        )
+        rows = cursor.fetchall()
+
+        if rows:
+            all_verbs, all_adjs, all_imgs = set(), set(), set()
+            # 🌟 修复：增加脏词黑名单，过滤掉大模型常返回的无意义占位符
+            blacklist = {"无", "未知", "暂无", "没有", "null", "none", "未提供"}
+
+            for v_str, a_str, i_str in rows:
+                if v_str:
+                    all_verbs.update(
+                        [
+                            w.strip()
+                            for w in v_str.split(",")
+                            if w.strip() and w.strip() not in blacklist
+                        ]
+                    )
+                if a_str:
+                    all_adjs.update(
+                        [
+                            w.strip()
+                            for w in a_str.split(",")
+                            if w.strip() and w.strip() not in blacklist
+                        ]
+                    )
+                if i_str:
+                    all_imgs.update(
+                        [
+                            w.strip()
+                            for w in i_str.split(",")
+                            if w.strip() and w.strip() not in blacklist
+                        ]
+                    )
+
+            style_dict = {
+                "verbs": list(all_verbs)[:30],
+                "adjectives": list(all_adjs)[:30],
+                "imagery": list(all_imgs)[:30],
+            }
+
+            style_path = os.path.join(
+                os.path.dirname(graph_path), f"{safe_author}_style_fingerprint.json"
+            )
+            with open(style_path, "w", encoding="utf-8") as f:
+                json.dump(style_dict, f, ensure_ascii=False, indent=2)
+
+            # 📍 Log 标注：文风激活成功
+            logger.info(
+                f"🎨 [文风激活] 已聚合 {safe_author} 的文风指纹，缓存至: {style_path}"
+            )
+    except Exception as e:
+        logger.debug(f"⚠️ [文风激活] 提取文风指纹时发生预期外情况: {e}")
 
     # 🌟 最终汇总战报
     logger.info("")
@@ -1686,12 +2058,20 @@ def process_single_book(book_info: Dict, manifest: Dict, db_conn: sqlite3.Connec
         stage_b_res = run_stage_b(stage_a_res, book_name, book_info["category"])
         stage_c_res = run_stage_c(stage_a_res, book_name, book_info["category"])
 
+        # 🌟 执行新增阶段 (只提取数据)
+        author_name = book_info.get("author", "未知作者")
+        stage_d_res = run_stage_d(book_name, book_info["category"], author_name)
+        stage_e_res = run_stage_e(stage_a_res, book_name, book_info["category"])
+
+        # 🌟 统一收口入库
         insert_knowledge(
             stage_a_res,
             stage_b_res,
             stage_c_res,
+            stage_d_res,  # 🌟 传入
+            stage_e_res,  # 🌟 传入
             db_conn,
-            author=book_info.get("author", "未知作者"),
+            author=author_name,
         )
 
         manifest["completed_books"].append(book_name)
