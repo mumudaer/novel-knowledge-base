@@ -882,7 +882,8 @@ def process_single_chapter_c(
     "preferred_verbs": ["作者偏爱的特色动词，限5个，必须是纯字符串"],
     "preferred_adjectives": ["偏爱的特色形容词，限5个，必须是纯字符串"],
     "environmental_imagery": ["环境描写常用意象，限5个，必须是纯字符串"],
-    "signature_transitions": ["标志性的过渡句或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"]
+    "signature_transitions": ["标志性的过渡句或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"],
+    "negative_prompts": "【重要】总结该作者绝对不会用的词汇、句式，或AI常犯的说教味毛病(如:禁用'然而/不仅如此/眼中闪过一丝'，禁止在章末进行道德总结，限50字)",
   }},
   "sensory_mappings": [
     {{
@@ -1029,7 +1030,7 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
     chunks = [raw_text[i : i + 5000] for i in range(0, len(raw_text), 5000)]
 
     for idx, chunk in enumerate(tqdm(chunks, desc="解析设定集")):
-        prompt_d = f"""你是顶级的网文世界观架构师。请从以下设定集文本中，提取【世界观规则】、【全阵营人物底色】以及【历史编年史】。
+        prompt_d = f"""你是顶级的网文世界观架构师与人物塑造大师。请根据本书的实际题材（如：玄幻/都市/言情/科幻/悬疑/历史等），从以下设定集文本中，自适应提取【核心规则与空间拓扑】、【全阵营立体人物档案】以及【历史编年史】。
 【书名】{book_name} 【作者】{author} 【分类】{category}
 【设定集片段】
 {chunk}
@@ -1038,33 +1039,43 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
 {{
   "world_settings": [
     {{
-      "module": "模块名(如:力量体系/阵营势力/地理生态/经济规则/历史悬念)",
-      "entity": "具体实体名(如:占卜家途径/精灵王庭/灵石货币)",
-      "content": "详细的规则、设定、运作逻辑或历史背景(100-300字)",
+      "module": "设定模块(自适应题材，如:力量体系/科技树/商业规则/社会阶层/地理拓扑/核心资源)",
+      "entity": "具体实体名(如:斗之气三段/筑基期/ABO血型/京圈势力/某项核心科技/某地图区域)",
+      "content": "详细规则、效果、空间分布、【核心限制/代价/获取难度/底层冲突】(100-300字。注：必须体现该设定带来的矛盾冲突或资源争夺)",
       "tags": ["标签1", "标签2"] 
     }}
   ],
   "character_profiles": [
     {{
       "name": "人物名",
-      "role_type": "角色定位(男主/女主/核心配角/重要反派/导师/宿敌)",
-      "identity": "身份/职业/阵营",
-      "motivation": "核心动机/终极目标",
-      "personality": "性格底色/优缺点/说话口癖",
-      "relation_to_mc": "与主角的初始关系(如:青梅竹马/生死仇敌/表面恭敬暗中算计)",
-      "background": "前史/背景故事"
+      "role_type": "角色定位(男主/女主/核心配角/重要反派/导师/宿敌/白月光等)",
+      "appearance": "视觉记忆点(自适应题材：如发色/瞳色/疤痕/标志性穿搭/气质/职业装扮，50字内)",
+      "quirks": "标志性口癖/微表情/下意识动作/特殊习惯",
+      "identity": "身份/职业/阵营/社会阶层",
+      "motivation": "核心动机/终极目标/核心欲望",
+      "internal_conflict": "【新增】内心冲突/人物弧光(如:表面冷酷内心缺爱/从苟道到为苍生拔剑的成长轨迹)",
+      "personality": "性格底色/优缺点/行事底线",
+      "relation_to_mc": "与主角的初始关系",
+      "relations_to_others": "与其他重要配角的社会与情感羁绊(如:利益绑定/情感纠葛/血仇/职场竞争)",
+      "climax_or_fate": "【新增】高光时刻预设/宿命结局(如:为救主角战死/最终成为商界寡头)",
+      "background": "前史/背景故事/原生家庭影响"
     }}
   ],
   "world_timeline": [
     {{
-      "era_or_year": "纪元或年份(如:混乱纪元/1342年)",
+      "era_or_year": "纪元或年份(如:混乱纪元/1342年/2077年/主角高三那年)",
       "event_name": "大事件名称",
       "event_description": "事件简述(50字内)",
-      "impact": "对当前世界/主角的影响(50字内)"
+      "impact": "对当前世界/主角/核心势力的影响(50字内)"
     }}
   ]
 }}
-(注意：必须尽可能多地提取女主、重要配角和反派，不要只写主角！如果片段中没有相关信息，对应数组请留空。禁止使用反引号，必须输出合法JSON)"""
+(⚠️核心要求：
+1. 必须根据小说实际题材自适应提取！不要在没有修仙设定的现代文里强行提取法宝！
+2. 必须提取设定的【限制与底层冲突】（如：某项技术的缺陷、某种商业操作的法律风险、地图势力的地缘冲突）！
+3. 必须提取人物的【内心冲突/弧光】和【高光/宿命预设】！
+4. 必须尽可能多地提取女主、重要配角和反派！如果片段中没有相关信息，对应数组请留空。
+5. 禁止使用反引号，必须输出合法JSON)"""
 
         try:
             resp = ollama_chat(prompt_d, 0.1, "A")
@@ -1095,10 +1106,16 @@ def run_stage_d(book_name: str, category: str, author: str) -> Dict[str, List[Di
                             "category": category,
                             "name": cp.get("name"),
                             "role_type": cp.get("role_type", "未知"),
+                            "appearance": cp.get("appearance", ""),
+                            "quirks": cp.get("quirks", ""),
                             "identity": cp.get("identity", ""),
                             "motivation": cp.get("motivation", ""),
+                            # 🌟 安全追加：内心冲突、高光预设
+                            "internal_conflict": cp.get("internal_conflict", ""),
+                            "climax_or_fate": cp.get("climax_or_fate", ""),
                             "personality": cp.get("personality", ""),
                             "relation_to_mc": cp.get("relation_to_mc", "未知"),
+                            "relations_to_others": cp.get("relations_to_others", ""),
                             "background": cp.get("background", ""),
                         }
                     )
@@ -1290,7 +1307,7 @@ def init_database_resource(db_conn: Optional[sqlite3.Connection] = None):
     TABLE_SCHEMAS = {
         "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT)",
         "plot_arcs": "(chapter_id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary TEXT, character_state_json TEXT)",
-        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT)",
+        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT)",
         "sensory_mappings": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, emotion TEXT, show_not_tell TEXT, analysis TEXT)",
         "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
         "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, resolved_chapter TEXT)",
@@ -1662,9 +1679,12 @@ def insert_knowledge(
                         for v in fp.get("signature_transitions", [])
                         if isinstance(v, (str, int, float))
                     ]
+                    safe_neg = str(
+                        item.get("author_fingerprint", {}).get("negative_prompts", "")
+                    )
 
                     cursor.execute(
-                        "INSERT OR IGNORE INTO author_fingerprints VALUES (?,?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?)",
                         (
                             fp_id,
                             book,
@@ -1673,6 +1693,7 @@ def insert_knowledge(
                             ",".join(safe_adjs),
                             ",".join(safe_imgs),
                             "||".join(safe_trans),
+                            safe_neg,
                         ),
                     )
                     stats["fingerprints_db"] += 1
@@ -1877,8 +1898,19 @@ def insert_knowledge(
                 f"{cp['book_name']}|{cp['name']}|profile".encode()
             ).hexdigest()
             c_ids.append(c_id)
+            # 🌟 安全扩充：将内心冲突、高光预设拼入文档，原有字段一个不少
             c_docs.append(
-                f"定位:{cp.get('role_type', '未知')}\n身份:{cp['identity']}\n动机:{cp['motivation']}\n性格:{cp['personality']}\n与主角关系:{cp.get('relation_to_mc', '未知')}\n前史:{cp['background']}"
+                f"定位:{cp.get('role_type', '未知')}\n"
+                f"外貌:{cp.get('appearance', '无')}\n"
+                f"微表情/口癖:{cp.get('quirks', '无')}\n"
+                f"身份:{cp['identity']}\n"
+                f"动机:{cp['motivation']}\n"
+                f"内心冲突/弧光:{cp.get('internal_conflict', '无')}\n"
+                f"性格:{cp['personality']}\n"
+                f"与主角关系:{cp.get('relation_to_mc', '未知')}\n"
+                f"与其他配角关系:{cp.get('relations_to_others', '无')}\n"
+                f"高光/宿命预设:{cp.get('climax_or_fate', '无')}\n"
+                f"前史:{cp['background']}"
             )
             c_metas.append(
                 {
