@@ -1,0 +1,310 @@
+"""
+Ollama API 客户端模块
+封装与本地 Ollama 服务的通信
+"""
+import json
+import re
+import time
+import requests
+import logging
+import threading
+import json_repair
+from typing import Optional, Dict, Any
+from requests.adapters import HTTPAdapter
+from config.settings import (
+    OLLAMA_API_URL,
+    OLLAMA_BASE_URL,
+    OLLAMA_TIMEOUT,
+    OLLAMA_NUM_PREDICT,
+    MODEL_CONFIG,
+    HTTP_POOL_CONNECTIONS,
+    HTTP_POOL_MAXSIZE,
+    HTTP_MAX_RETRIES,
+    get_model_config,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class VRAMManager:
+    """
+    显存分时复用管理器
+    在 16GB 显存限制下，协调 LLM 推理模型和 Embedding 模型的显存分配。
+    策略：
+    - 构建期：LLM 推理为主，embedding 只在批量写入时短暂加载
+    - 服务期：embedding 常驻（约 2GB），LLM 按需加载
+    - 切换模型时，通过 keep_alive=0 立即释放旧模型显存
+    """
+
+    def __init__(self, total_vram_gb: int = 16):
+        self.total_vram = total_vram_gb
+        self._lock = threading.Lock()
+        self._current_model: Optional[str] = None
+        self._model_load_time: Optional[float] = None
+
+    def ensure_model_loaded(self, model_name: str):
+        """
+        确保指定模型已加载。如果当前加载的是其他模型，先卸载旧模型。
+        通过 Ollama 的 keep_alive 机制控制模型生命周期。
+        """
+        with self._lock:
+            if self._current_model == model_name:
+                return  # 已是当前模型，无需切换
+
+            if self._current_model and self._current_model != model_name:
+                self._unload_model(self._current_model)
+
+            self._current_model = model_name
+            self._model_load_time = time.time()
+            logger.debug(f"VRAM: 模型已切换为 {model_name}")
+
+    def _unload_model(self, model_name: str):
+        """
+        通过发送 keep_alive=0 请求，让 Ollama 立即卸载模型释放显存
+        """
+        try:
+            requests.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json={"model": model_name, "keep_alive": 0},
+                timeout=10,
+            )
+            logger.debug(f"VRAM: 模型 {model_name} 已卸载，显存已释放")
+        except Exception as e:
+            logger.warning(f"VRAM: 卸载模型 {model_name} 失败: {e}")
+
+    def unload_all(self):
+        """卸载所有已加载模型，释放全部显存"""
+        with self._lock:
+            if self._current_model:
+                self._unload_model(self._current_model)
+                self._current_model = None
+
+    def get_current_model(self) -> Optional[str]:
+        """获取当前加载的模型名"""
+        return self._current_model
+
+
+# 全局 VRAM 管理器实例
+_global_vram_manager: Optional[VRAMManager] = None
+_vram_manager_lock = threading.Lock()
+
+
+def get_vram_manager() -> VRAMManager:
+    """获取全局 VRAM 管理器实例"""
+    global _global_vram_manager
+    if _global_vram_manager is None:
+        with _vram_manager_lock:
+            if _global_vram_manager is None:
+                _global_vram_manager = VRAMManager()
+    return _global_vram_manager
+
+
+class OllamaClient:
+    """Ollama API 客户端"""
+
+    def __init__(self):
+        """初始化 HTTP Session"""
+        self.session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=HTTP_POOL_CONNECTIONS,
+            pool_maxsize=HTTP_POOL_MAXSIZE,
+            max_retries=HTTP_MAX_RETRIES,
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+
+    def check_health(self) -> bool:
+        """检查 Ollama 服务状态"""
+        print("🔍 正在检查 Ollama 服务状态...")
+        try:
+            resp = self.session.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=10)
+            resp.raise_for_status()
+            models = resp.json().get("models", [])
+            if not models:
+                print("⚠️ Ollama 服务正常，但未发现任何模型。请先下载所需模型。")
+                return False
+
+            installed_models = {m["name"] for m in models}
+            print(f"✅ Ollama 服务正常，已安装模型: {', '.join(installed_models)}")
+
+            # 检查必需模型
+            required_models = {
+                "qwen2.5:7b",
+                "qwen3:14b",
+            }
+            missing = required_models - installed_models
+            if missing:
+                print(f"⚠️ 缺少以下模型: {', '.join(missing)}")
+                print("   请使用 'ollama pull <model_name>' 下载")
+                return False
+
+            # 可选模型（不强制）
+            optional_models = {"qwen2.5:3b"}  # 3b 已不再用于核心流程，仅作为可选
+            for opt in optional_models:
+                if opt not in installed_models:
+                    print(f"ℹ️ 可选模型未安装: {opt}（非必需，不影响核心流程）")
+
+            return True
+        except requests.exceptions.ConnectionError:
+            print("❌ 无法连接到 Ollama 服务，请确保 Ollama 已启动")
+            return False
+        except Exception as e:
+            print(f"❌ Ollama 健康检查失败: {e}")
+            return False
+
+    def chat(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+        stage: str = "A",
+        max_retries: int = 3,
+    ) -> str:
+        """
+        调用 Ollama API 进行对话
+
+        Args:
+            prompt: 提示词
+            temperature: 温度参数
+            stage: Stage 标识（用于选择模型）
+            max_retries: 最大重试次数
+
+        Returns:
+            模型响应文本
+        """
+        config = get_model_config(stage)
+        model = config["model"]
+        num_ctx = config["num_ctx"]
+
+        # 显存分时复用：确保当前模型已加载，必要时卸载旧模型
+        vram = get_vram_manager()
+        vram.ensure_model_loaded(model)
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_ctx": num_ctx,
+                "num_predict": 2048,
+            },
+        }
+
+        for attempt in range(max_retries):
+            try:
+                resp = self.session.post(
+                    OLLAMA_API_URL,
+                    json=payload,
+                    timeout=OLLAMA_TIMEOUT,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+
+                if "message" in result and "content" in result["message"]:
+                    return result["message"]["content"]
+                else:
+                    logger.warning(f"⚠️ API 响应格式异常: {result}")
+                    return ""
+
+            except requests.exceptions.Timeout:
+                logger.warning(f"⚠️ 请求超时 (尝试 {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                continue
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"❌ 请求失败: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                continue
+
+            except Exception as e:
+                logger.error(f"❌ 未知错误: {e}")
+                return ""
+
+        logger.error(f"❌ 达到最大重试次数，返回空响应")
+        return ""
+
+    def close(self):
+        """关闭 HTTP Session"""
+        self.session.close()
+
+
+# JSON 解析工具函数
+JSON_BLOCK_RE = re.compile(r"`{3}json\s*(\{.*\})\s*`{3}", re.DOTALL)
+
+
+def extract_raw_json(text: str) -> str:
+    """从文本中提取 JSON 字符串"""
+    if not text:
+        return ""
+
+    # 尝试提取 ```json ... ``` 块
+    match = JSON_BLOCK_RE.search(text)
+    if match:
+        return match.group(1).strip()
+
+    # 尝试直接提取 {...}
+    text = text.strip()
+    if text.startswith("{") and text.endswith("}"):
+        return text
+
+    # 尝试找到第一个 { 和最后一个 }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+
+    return ""
+
+
+def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
+    """安全解析 JSON，支持修复常见格式错误"""
+    if not text:
+        return None
+
+    raw = extract_raw_json(text)
+    if not raw:
+        return None
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # 尝试使用 json_repair 修复
+        try:
+            import json_repair
+            return json_repair.repair_json(raw, return_objects=True)
+        except Exception:
+            pass
+
+        # 尝试手动修复常见问题
+        try:
+            # 移除尾部逗号
+            fixed = re.sub(r",\s*([}\]])", r"\1", raw)
+            return json.loads(fixed)
+        except Exception:
+            pass
+
+        return None
+
+
+# 全局客户端实例
+_global_client: Optional[OllamaClient] = None
+_client_lock = threading.Lock()
+
+
+def get_ollama_client() -> OllamaClient:
+    """获取全局 Ollama 客户端实例（线程安全）"""
+    global _global_client
+    if _global_client is None:
+        with _client_lock:
+            # 双重检查锁定
+            if _global_client is None:
+                _global_client = OllamaClient()
+    return _global_client
+
+
+def ollama_chat(prompt: str, temperature: float = 0.2, stage: str = "A") -> str:
+    """便捷函数：调用 Ollama API"""
+    client = get_ollama_client()
+    return client.chat(prompt, temperature, stage)
