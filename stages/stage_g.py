@@ -1,7 +1,8 @@
 """
 Stage G: 人物深度特征提取
-使用 qwen3:14b 模型，提取人物语言风格、行为标志、关系动态演变
+使用 qwen14b:latest 模型，提取人物语言风格、行为标志、关系动态演变
 """
+
 import json
 import logging
 from typing import List, Dict, Any
@@ -44,12 +45,18 @@ class StageG(BaseStage):
             char_state = chap.get("character_state", {})
             for char_name in char_state.keys():
                 if char_name not in ["_raw", "旁白"]:
-                    character_frequency[char_name] = character_frequency.get(char_name, 0) + 1
+                    character_frequency[char_name] = (
+                        character_frequency.get(char_name, 0) + 1
+                    )
 
-        logger.info(f"📊 [阶段G] 发现 {len(character_frequency)} 个人物，将提取深度特征")
+        logger.info(
+            f"📊 [阶段G] 发现 {len(character_frequency)} 个人物，将提取深度特征"
+        )
 
         # 按出现频率排序，优先提取高频人物
-        sorted_characters = sorted(character_frequency.items(), key=lambda x: x[1], reverse=True)
+        sorted_characters = sorted(
+            character_frequency.items(), key=lambda x: x[1], reverse=True
+        )
         target_characters = [char_name for char_name, freq in sorted_characters[:20]]
 
         for char_name in tqdm(target_characters, desc="提取人物深度特征"):
@@ -65,10 +72,12 @@ class StageG(BaseStage):
 
             # 取前 5 章作为样本
             sample_chapters = char_chapters[:5]
-            sample_text = "\n\n".join([
-                f"【{c.get('id', '')}】\n{c.get('text', '')[:1000]}"
-                for c in sample_chapters
-            ])
+            sample_text = "\n\n".join(
+                [
+                    f"【{c.get('id', '')}】\n{c.get('text', '')[:1000]}"
+                    for c in sample_chapters
+                ]
+            )
 
             prompt = f"""你是顶级的人物塑造大师与文学分析师。请根据以下章节片段，深度分析人物【{char_name}】的语言风格、行为标志和关系动态。
 
@@ -127,38 +136,48 @@ class StageG(BaseStage):
                 # 解析语言风格
                 speech = data.get("speech_style", {})
                 if speech:
-                    result["character_speech_style"].append({
-                        "book_name": self.book_name,
-                        "character_name": char_name,
-                        "catchphrases": speech.get("catchphrases", []),
-                        "vocabulary_preference": speech.get("vocabulary_preference", ""),
-                        "sentence_pattern": speech.get("sentence_pattern", ""),
-                        "tone_contexts": speech.get("tone_contexts", {}),
-                        "dialogue_samples": speech.get("dialogue_samples", []),
-                    })
+                    result["character_speech_style"].append(
+                        {
+                            "book_name": self.book_name,
+                            "character_name": char_name,
+                            "catchphrases": speech.get("catchphrases", []),
+                            "vocabulary_preference": speech.get(
+                                "vocabulary_preference", ""
+                            ),
+                            "sentence_pattern": speech.get("sentence_pattern", ""),
+                            "tone_contexts": speech.get("tone_contexts", {}),
+                            "dialogue_samples": speech.get("dialogue_samples", []),
+                        }
+                    )
 
                 # 解析行为标志
                 behavior = data.get("behavior_marks", {})
                 if behavior:
-                    result["character_behavior_marks"].append({
-                        "book_name": self.book_name,
-                        "character_name": char_name,
-                        "habitual_actions": behavior.get("habitual_actions", []),
-                        "micro_expressions": behavior.get("micro_expressions", []),
-                        "defense_mechanisms": behavior.get("defense_mechanisms", ""),
-                        "behavior_samples": behavior.get("behavior_samples", []),
-                    })
+                    result["character_behavior_marks"].append(
+                        {
+                            "book_name": self.book_name,
+                            "character_name": char_name,
+                            "habitual_actions": behavior.get("habitual_actions", []),
+                            "micro_expressions": behavior.get("micro_expressions", []),
+                            "defense_mechanisms": behavior.get(
+                                "defense_mechanisms", ""
+                            ),
+                            "behavior_samples": behavior.get("behavior_samples", []),
+                        }
+                    )
 
                 # 解析关系动态
                 relationships = data.get("relationship_dynamics", [])
                 for rel in relationships:
                     if isinstance(rel, dict) and rel.get("other_character"):
-                        result["character_relationship_dynamics"].append({
-                            "book_name": self.book_name,
-                            "character_a": char_name,
-                            "character_b": rel["other_character"],
-                            "timeline": rel.get("relationship_timeline", []),
-                        })
+                        result["character_relationship_dynamics"].append(
+                            {
+                                "book_name": self.book_name,
+                                "character_a": char_name,
+                                "character_b": rel["other_character"],
+                                "timeline": rel.get("relationship_timeline", []),
+                            }
+                        )
 
             except Exception as e:
                 logger.warning(f"⚠️ [阶段G] 解析人物 {char_name} 失败: {e}")
@@ -196,13 +215,16 @@ class StageG(BaseStage):
                     latest_state = last_entry.get("relationship_state", "")
 
                 graph.add_edge(
-                    node_a, node_b,
+                    node_a,
+                    node_b,
                     relation_type=latest_state or "unknown",
                     book_name=self.book_name,
                 )
 
             graph.save()
-            logger.info(f"📊 [阶段G] 知识图谱已更新 {len(result.get('character_relationship_dynamics', []))} 条人物关系边")
+            logger.info(
+                f"📊 [阶段G] 知识图谱已更新 {len(result.get('character_relationship_dynamics', []))} 条人物关系边"
+            )
         except Exception as e:
             logger.warning(f"⚠️ [阶段G] 知识图谱更新失败: {e}")
 
@@ -217,7 +239,9 @@ class StageG(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO character_speech_style VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    ss_id, ss["book_name"], ss["character_name"],
+                    ss_id,
+                    ss["book_name"],
+                    ss["character_name"],
                     "|".join(ss.get("catchphrases", [])),
                     ss.get("vocabulary_preference", ""),
                     ss.get("sentence_pattern", ""),
@@ -239,12 +263,16 @@ class StageG(BaseStage):
                 f"句式偏好:{ss.get('sentence_pattern', '')}\n"
                 f"对话样本:{'|'.join(ss.get('dialogue_samples', []))}"
             )
-            ss_metas.append({
-                "book_name": ss["book_name"],
-                "character_name": ss["character_name"],
-            })
+            ss_metas.append(
+                {
+                    "book_name": ss["book_name"],
+                    "character_name": ss["character_name"],
+                }
+            )
         if ss_ids:
-            self.chroma.upsert_batch("character_speech_style_kb", ss_ids, ss_docs, ss_metas)
+            self.chroma.upsert_batch(
+                "character_speech_style_kb", ss_ids, ss_docs, ss_metas
+            )
 
         # 行为标志入库
         for bm in results.get("character_behavior_marks", []):
@@ -252,7 +280,9 @@ class StageG(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO character_behavior_marks VALUES (?,?,?,?,?,?,?)",
                 (
-                    bm_id, bm["book_name"], bm["character_name"],
+                    bm_id,
+                    bm["book_name"],
+                    bm["character_name"],
                     "|".join(bm.get("habitual_actions", [])),
                     "|".join(bm.get("micro_expressions", [])),
                     bm.get("defense_mechanisms", ""),
@@ -267,8 +297,10 @@ class StageG(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO character_relationship_dynamics VALUES (?,?,?,?,?)",
                 (
-                    rd_id, rd["book_name"],
-                    rd["character_a"], rd["character_b"],
+                    rd_id,
+                    rd["book_name"],
+                    rd["character_a"],
+                    rd["character_b"],
                     json.dumps(rd.get("timeline", []), ensure_ascii=False),
                 ),
             )

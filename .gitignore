@@ -1,4 +1,6 @@
 novels/
 .reasonix
 .obsidian
-novel_kb
+novel_kb/
+novel-wait/
+# venv

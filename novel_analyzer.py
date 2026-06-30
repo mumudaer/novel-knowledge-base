@@ -8,6 +8,7 @@
 
 断点续跑粒度：Layer 级别 + Stage 级别双重保障
 """
+
 import os
 import sys
 import glob
@@ -55,7 +56,7 @@ logger = logging.getLogger(__name__)
 # ===================== Layer 定义 =====================
 
 LAYER_STAGES = {
-    1: ["A"],           # 基础层：必须最先完成
+    1: ["A"],  # 基础层：必须最先完成
     2: ["B", "C", "D", "I"],  # 分析层：依赖 Layer 1，彼此独立
     3: ["E", "F", "G", "H"],  # 综合层：依赖 Layer 1+2，彼此可并行
 }
@@ -102,7 +103,9 @@ def mark_stage_failed(manifest: Dict, book_name: str, stage: str, error: str):
             manifest["book_progress"][book_name] = {"stage_status": {}}
         if "stage_status" not in manifest["book_progress"][book_name]:
             manifest["book_progress"][book_name]["stage_status"] = {}
-        manifest["book_progress"][book_name]["stage_status"][stage] = f"failed:{error[:100]}"
+        manifest["book_progress"][book_name]["stage_status"][
+            stage
+        ] = f"failed:{error[:100]}"
         save_manifest(manifest)
 
 
@@ -135,11 +138,20 @@ def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
         icons = [status_icon(s) for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]]
 
         # 判断整体状态
-        if all(stage_status.get(s) == "complete" for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]):
+        if all(
+            stage_status.get(s) == "complete"
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+        ):
             overall = "DONE"
-        elif any(stage_status.get(s, "").startswith("failed") for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]):
+        elif any(
+            stage_status.get(s, "").startswith("failed")
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+        ):
             overall = "ERR"
-        elif any(stage_status.get(s) == "complete" for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]):
+        elif any(
+            stage_status.get(s) == "complete"
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+        ):
             overall = "WIP"
         else:
             overall = "NEW"
@@ -151,6 +163,7 @@ def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
 
 
 # ===================== 扫描与预处理 =====================
+
 
 def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
     """扫描小说库目录"""
@@ -165,7 +178,9 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
         # 提取分类
         if len(parts) >= 3:
             category = parts[1]
-            category = re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+            category = (
+                re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+            )
         elif len(parts) == 2:
             category = parts[0]
         else:
@@ -186,13 +201,15 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
 
         db_book_name = f"{pure_book_name}{suffix}" if suffix else pure_book_name
 
-        book_list.append({
-            "book_name": db_book_name,
-            "pure_name": pure_book_name,
-            "author": author_name,
-            "category": category,
-            "all_files": [path],
-        })
+        book_list.append(
+            {
+                "book_name": db_book_name,
+                "pure_name": pure_book_name,
+                "author": author_name,
+                "category": category,
+                "all_files": [path],
+            }
+        )
 
     print(f"扫描完成，共发现 {len(book_list)} 本独立小说。")
     return book_list
@@ -214,11 +231,14 @@ def merge_txt_files(file_list: List[str], output_path: str) -> str:
                         out.write(inp.read() + "\n\n")
                 except Exception:
                     with open(f, "rb") as inp:
-                        out.write(inp.read().decode("latin-1", errors="ignore") + "\n\n")
+                        out.write(
+                            inp.read().decode("latin-1", errors="ignore") + "\n\n"
+                        )
     return output_path
 
 
 # ===================== Layer 执行函数 =====================
+
 
 def run_layer_1(book_name: str, category: str, chapters: List[Dict], manifest: Dict):
     """
@@ -257,8 +277,9 @@ def run_layer_1(book_name: str, category: str, chapters: List[Dict], manifest: D
     return stage_a_res, inferred_cat, protagonist_names
 
 
-def run_layer_2(book_name: str, category: str, author: str,
-                stage_a_res: List[Dict], manifest: Dict):
+def run_layer_2(
+    book_name: str, category: str, author: str, stage_a_res: List[Dict], manifest: Dict
+):
     """
     Layer 2 (分析层): Stage B/C/D/I — 完全并行
     依赖 Layer 1 的摘要数据，但各 Stage 之间无数据依赖
@@ -317,8 +338,7 @@ def run_layer_2(book_name: str, category: str, author: str,
                 mark_stage_failed(manifest, book_name, stage_key, str(e))
 
 
-def run_layer_3(book_name: str, category: str,
-                stage_a_res: List[Dict], manifest: Dict):
+def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest: Dict):
     """
     Layer 3 (综合层): Stage E/F/G/H — 完全并行
     依赖 Layer 1 的摘要数据和 Layer 2 的部分结果（但代码审查确认 E/F/G/H 之间无直接依赖）
@@ -353,16 +373,30 @@ def run_layer_3(book_name: str, category: str,
         # 从数据库恢复 Stage E 结果
         db = get_db_manager()
         cursor = db.connect().cursor()
-        cursor.execute(
-            "SELECT * FROM macro_outlines WHERE book_name = ?", (book_name,)
-        )
+        cursor.execute("SELECT * FROM macro_outlines WHERE book_name = ?", (book_name,))
         rows = cursor.fetchall()
         if rows:
-            stage_e_res = {"macro_outlines": [dict(zip(
-                ["id", "book_name", "category", "volume_index", "chapter_range",
-                 "theme", "conflict", "beats_json", "arc"],
-                row
-            )) for row in rows]}
+            stage_e_res = {
+                "macro_outlines": [
+                    dict(
+                        zip(
+                            [
+                                "id",
+                                "book_name",
+                                "category",
+                                "volume_index",
+                                "chapter_range",
+                                "theme",
+                                "conflict",
+                                "beats_json",
+                                "arc",
+                            ],
+                            row,
+                        )
+                    )
+                    for row in rows
+                ]
+            }
 
     def run_stage_e(stage_obj):
         result = stage_obj.run(stage_a_res)
@@ -420,6 +454,7 @@ def run_layer_3(book_name: str, category: str,
 
 # ===================== 后处理 =====================
 
+
 def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
     """生成书籍风格概述并更新 book_metadata"""
     db = get_db_manager()
@@ -435,13 +470,15 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
         )
         fp_row = cursor.fetchone()
         if fp_row:
-            style_info.extend([
-                f"常用动词：{fp_row[0]}",
-                f"常用形容词：{fp_row[1]}",
-                f"意象偏好：{fp_row[2]}",
-                f"叙事视角：{fp_row[3]}",
-                f"句式节奏：{fp_row[4]}",
-            ])
+            style_info.extend(
+                [
+                    f"常用动词：{fp_row[0]}",
+                    f"常用形容词：{fp_row[1]}",
+                    f"意象偏好：{fp_row[2]}",
+                    f"叙事视角：{fp_row[3]}",
+                    f"句式节奏：{fp_row[4]}",
+                ]
+            )
 
         # 从 book_structure 表取数据
         cursor.execute(
@@ -450,11 +487,13 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
         )
         bs_row = cursor.fetchone()
         if bs_row:
-            style_info.extend([
-                f"结构类型：{bs_row[0]}",
-                f"表层主题：{bs_row[1]}",
-                f"深层主题：{bs_row[2]}",
-            ])
+            style_info.extend(
+                [
+                    f"结构类型：{bs_row[0]}",
+                    f"表层主题：{bs_row[1]}",
+                    f"深层主题：{bs_row[2]}",
+                ]
+            )
 
         # 从 climax_point_distribution 表取数据
         cursor.execute(
@@ -465,7 +504,9 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
         if cpd_row:
             style_info.append(f"节奏模式：{cpd_row[0]}")
 
-        author_desc = " | ".join([s for s in style_info if s and "：" in s and s.split("：", 1)[1]])
+        author_desc = " | ".join(
+            [s for s in style_info if s and "：" in s and s.split("：", 1)[1]]
+        )
 
         if author_desc:
             cursor.execute(
@@ -511,6 +552,7 @@ def finalize_book(book_name: str, manifest: Dict):
 
 
 # ===================== 主处理函数 =====================
+
 
 def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int = 1):
     """处理单本小说 — 三层弹性架构"""
@@ -565,14 +607,22 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
         cursor.execute(
             "INSERT OR REPLACE INTO book_metadata VALUES (?,?,?,?,?,?,?,?,?)",
             (
-                metadata_id, book_name, author, category, genre_tags,
-                total_chapters, total_words, "",
+                metadata_id,
+                book_name,
+                author,
+                category,
+                genre_tags,
+                total_chapters,
+                total_words,
+                "",
                 datetime.now().isoformat(),
             ),
         )
         db.commit()
 
-        print(f"\n{'='*20} 开始处理：《{book_name}》 (总章数:{total_chapters}) {'='*20}")
+        print(
+            f"\n{'='*20} 开始处理：《{book_name}》 (总章数:{total_chapters}) {'='*20}"
+        )
         manifest["current_processing"] = book_name
         save_manifest(manifest)
 
@@ -619,6 +669,7 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
 
 # ===================== 主入口 =====================
 
+
 def main():
     """主入口函数"""
     parser = argparse.ArgumentParser(description="小说知识库构建系统（三层弹性架构版）")
@@ -652,7 +703,9 @@ def main():
     # 健康检查
     client = get_ollama_client()
     if not client.check_health():
-        print("Ollama 服务检查失败，请确保 Ollama 已启动并安装了所需模型（qwen2.5:7b, qwen3:14b）")
+        print(
+            "Ollama 服务检查失败，请确保 Ollama 已启动并安装了所需模型（qwen2.5:7b, qwen14b:latest）"
+        )
         return
 
     # 初始化数据库
@@ -664,7 +717,9 @@ def main():
     chroma.init_collections(reset=args.reset_chroma)
 
     if args.reset_chroma:
-        print("WARNING: ChromaDB 集合已重置。由于旧向量数据与新 embedding 模型不兼容，需要重新处理所有小说。")
+        print(
+            "WARNING: ChromaDB 集合已重置。由于旧向量数据与新 embedding 模型不兼容，需要重新处理所有小说。"
+        )
         print("  正在清除所有 book_progress 记录，以便全量重建...")
         manifest = load_manifest()
         if "book_progress" in manifest:
@@ -694,8 +749,7 @@ def main():
 
     # 筛选待处理书籍（未完成所有 Layer 的书）
     pending_books = [
-        b for b in novel_list
-        if b["book_name"] not in manifest["completed_books"]
+        b for b in novel_list if b["book_name"] not in manifest["completed_books"]
     ]
 
     print(
@@ -712,7 +766,9 @@ def main():
         progress = manifest.get("book_progress", {}).get(book_name, {})
         stage_status = progress.get("stage_status", {})
         completed_stages = [s for s, v in stage_status.items() if v == "complete"]
-        failed_stages = [s for s, v in stage_status.items() if str(v).startswith("failed")]
+        failed_stages = [
+            s for s, v in stage_status.items() if str(v).startswith("failed")
+        ]
 
         status_info = f"已完成: {completed_stages}" if completed_stages else "新书"
         if failed_stages:
@@ -726,6 +782,7 @@ def main():
             process_single_book(book_info, manifest, start_from_layer=args.start_from)
         except Exception as e:
             import traceback
+
             error_msg = traceback.format_exc()
             print(f"处理《{book_name}》时发生致命错误：\n{error_msg}")
             with open(
@@ -740,9 +797,13 @@ def main():
     total_books = len(manifest.get("completed_books", []))
     if total_books >= 2:
         print(f"\n已有 {total_books} 本书完成基础构建，可以运行高级功能：")
-        print(f"  python run_advanced_stages.py               # 执行全部高级功能 (L/M/N)")
+        print(
+            f"  python run_advanced_stages.py               # 执行全部高级功能 (L/M/N)"
+        )
         print(f"  python run_advanced_stages.py --only L      # 只执行跨书对比分析")
-        print(f"  python run_advanced_stages.py --incremental # 增量模式：只处理新增书籍")
+        print(
+            f"  python run_advanced_stages.py --incremental # 增量模式：只处理新增书籍"
+        )
 
     print("\n小说库工业化构建全部执行完成！")
 

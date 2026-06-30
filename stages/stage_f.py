@@ -1,7 +1,8 @@
 """
 Stage F: 对话/描写/动作专项样本库
-使用 qwen3:14b 模型，按场景类型提取高质量的原文样本
+使用 qwen14b:latest 模型，按场景类型提取高质量的原文样本
 """
+
 import json
 import logging
 from typing import List, Dict, Any
@@ -23,7 +24,11 @@ class StageF(BaseStage):
 
     def _extract_basic_samples(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
         """批次1：提取基础样本（对话+描写+转场）"""
-        result = {"dialogue_samples": [], "description_samples": [], "transition_samples": []}
+        result = {
+            "dialogue_samples": [],
+            "description_samples": [],
+            "transition_samples": [],
+        }
 
         prompt = f"""你是顶级的文学编辑与写作教练。请从以下章节文本中，提取高质量的【对话样本】、【描写样本】和【转场样本】，作为写作参考的 Few-Shot 典例。
 
@@ -77,43 +82,57 @@ class StageF(BaseStage):
             if data:
                 for ds in data.get("dialogue_samples", []):
                     if isinstance(ds, dict) and ds.get("original_text"):
-                        result["dialogue_samples"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "scene_type": ds.get("scene_type", "未知"),
-                            "original_text": ds.get("original_text"),
-                            "emotional_tension": ds.get("emotional_tension", ""),
-                            "subtext": ds.get("subtext", ""),
-                            "plot_function": ds.get("plot_function", ""),
-                        })
+                        result["dialogue_samples"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "scene_type": ds.get("scene_type", "未知"),
+                                "original_text": ds.get("original_text"),
+                                "emotional_tension": ds.get("emotional_tension", ""),
+                                "subtext": ds.get("subtext", ""),
+                                "plot_function": ds.get("plot_function", ""),
+                            }
+                        )
 
                 for desc in data.get("description_samples", []):
                     if isinstance(desc, dict) and desc.get("original_text"):
-                        result["description_samples"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "description_type": desc.get("description_type", "未知"),
-                            "original_text": desc.get("original_text"),
-                            "technique_analysis": desc.get("technique_analysis", ""),
-                            "sensory_details": desc.get("sensory_details", ""),
-                        })
+                        result["description_samples"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "description_type": desc.get(
+                                    "description_type", "未知"
+                                ),
+                                "original_text": desc.get("original_text"),
+                                "technique_analysis": desc.get(
+                                    "technique_analysis", ""
+                                ),
+                                "sensory_details": desc.get("sensory_details", ""),
+                            }
+                        )
 
                 for trans in data.get("transition_samples", []):
                     if isinstance(trans, dict) and trans.get("original_text"):
-                        result["transition_samples"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "transition_type": trans.get("transition_type", "未知"),
-                            "original_text": trans.get("original_text"),
-                            "technique_analysis": trans.get("technique_analysis", ""),
-                        })
+                        result["transition_samples"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "transition_type": trans.get("transition_type", "未知"),
+                                "original_text": trans.get("original_text"),
+                                "technique_analysis": trans.get(
+                                    "technique_analysis", ""
+                                ),
+                            }
+                        )
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-基础样本] 解析章节 {chap_id} 失败: {e}")
             stage_result.add_failure(chap_id, str(e), "F-basic")
 
         return result
 
-    def _extract_advanced_samples(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
+    def _extract_advanced_samples(
+        self, text: str, chap_id: str
+    ) -> Dict[str, List[Dict]]:
         """批次2：提取进阶分析（叙事距离+Show/Tell+动作场景+高潮段落+金句）"""
         result = {
             "narrative_distance": [],
@@ -193,59 +212,83 @@ class StageF(BaseStage):
             data = safe_parse_json(resp)
             if data:
                 for nd in data.get("narrative_distance", []):
-                    if isinstance(nd, dict) and nd.get("distance_type") and nd.get("original_example"):
-                        result["narrative_distance"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "distance_type": nd.get("distance_type"),
-                            "trigger_reason": nd.get("trigger_reason", ""),
-                            "original_example": nd.get("original_example"),
-                        })
+                    if (
+                        isinstance(nd, dict)
+                        and nd.get("distance_type")
+                        and nd.get("original_example")
+                    ):
+                        result["narrative_distance"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "distance_type": nd.get("distance_type"),
+                                "trigger_reason": nd.get("trigger_reason", ""),
+                                "original_example": nd.get("original_example"),
+                            }
+                        )
 
                 for st in data.get("show_tell_patterns", []):
-                    if isinstance(st, dict) and st.get("pattern_type") and st.get("original_example"):
-                        result["show_tell_patterns"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "pattern_type": st.get("pattern_type"),
-                            "ratio_estimate": st.get("ratio_estimate", ""),
-                            "switching_triggers": st.get("switching_triggers", ""),
-                            "original_example": st.get("original_example"),
-                        })
+                    if (
+                        isinstance(st, dict)
+                        and st.get("pattern_type")
+                        and st.get("original_example")
+                    ):
+                        result["show_tell_patterns"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "pattern_type": st.get("pattern_type"),
+                                "ratio_estimate": st.get("ratio_estimate", ""),
+                                "switching_triggers": st.get("switching_triggers", ""),
+                                "original_example": st.get("original_example"),
+                            }
+                        )
 
                 for action in data.get("action_scene_samples", []):
                     if isinstance(action, dict) and action.get("original_text"):
-                        result["action_scene_samples"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "action_type": action.get("action_type", "未知"),
-                            "original_text": action.get("original_text"),
-                            "technique_analysis": action.get("technique_analysis", ""),
-                            "pacing_analysis": action.get("pacing_analysis", ""),
-                            "sensory_details": action.get("sensory_details", ""),
-                        })
+                        result["action_scene_samples"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "action_type": action.get("action_type", "未知"),
+                                "original_text": action.get("original_text"),
+                                "technique_analysis": action.get(
+                                    "technique_analysis", ""
+                                ),
+                                "pacing_analysis": action.get("pacing_analysis", ""),
+                                "sensory_details": action.get("sensory_details", ""),
+                            }
+                        )
 
                 for climax in data.get("climax_excerpts", []):
                     if isinstance(climax, dict) and climax.get("original_text"):
-                        result["climax_excerpts"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "excerpt_type": climax.get("excerpt_type", "未知"),
-                            "original_text": climax.get("original_text"),
-                            "technique_analysis": climax.get("technique_analysis", ""),
-                            "emotional_impact": climax.get("emotional_impact", ""),
-                        })
+                        result["climax_excerpts"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "excerpt_type": climax.get("excerpt_type", "未知"),
+                                "original_text": climax.get("original_text"),
+                                "technique_analysis": climax.get(
+                                    "technique_analysis", ""
+                                ),
+                                "emotional_impact": climax.get("emotional_impact", ""),
+                            }
+                        )
 
                 for quote in data.get("memorable_quotes", []):
                     if isinstance(quote, dict) and quote.get("quote_text"):
-                        result["memorable_quotes"].append({
-                            "book_name": self.book_name,
-                            "chapter_id": chap_id,
-                            "quote_text": quote.get("quote_text"),
-                            "context": quote.get("context", ""),
-                            "technique_analysis": quote.get("technique_analysis", ""),
-                            "quote_type": quote.get("quote_type", ""),
-                        })
+                        result["memorable_quotes"].append(
+                            {
+                                "book_name": self.book_name,
+                                "chapter_id": chap_id,
+                                "quote_text": quote.get("quote_text"),
+                                "context": quote.get("context", ""),
+                                "technique_analysis": quote.get(
+                                    "technique_analysis", ""
+                                ),
+                                "quote_type": quote.get("quote_type", ""),
+                            }
+                        )
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-进阶样本] 解析章节 {chap_id} 失败: {e}")
             stage_result.add_failure(chap_id, str(e), "F-advanced")
@@ -285,23 +328,27 @@ class StageF(BaseStage):
             # 代码截取开头/结尾（不依赖 LLM，确保 100% 准确）
             opening_text = text[:200] if len(text) >= 200 else text
             ending_text = text[-200:] if len(text) >= 200 else text
-            
-            result["chapter_opening_ending_samples"].append({
-                "book_name": self.book_name,
-                "chapter_id": chap_id,
-                "sample_position": "opening",
-                "original_text": opening_text,
-                "technique_analysis": "",
-                "hook_type": "",
-            })
-            result["chapter_opening_ending_samples"].append({
-                "book_name": self.book_name,
-                "chapter_id": chap_id,
-                "sample_position": "ending",
-                "original_text": ending_text,
-                "technique_analysis": "",
-                "hook_type": "",
-            })
+
+            result["chapter_opening_ending_samples"].append(
+                {
+                    "book_name": self.book_name,
+                    "chapter_id": chap_id,
+                    "sample_position": "opening",
+                    "original_text": opening_text,
+                    "technique_analysis": "",
+                    "hook_type": "",
+                }
+            )
+            result["chapter_opening_ending_samples"].append(
+                {
+                    "book_name": self.book_name,
+                    "chapter_id": chap_id,
+                    "sample_position": "ending",
+                    "original_text": ending_text,
+                    "technique_analysis": "",
+                    "hook_type": "",
+                }
+            )
 
             # 批次1：基础样本（对话+描写+转场）
             basic_data = self._extract_basic_samples(text, chap_id)
@@ -357,23 +404,31 @@ class StageF(BaseStage):
         for scene, samples in dialogue_by_scene.items():
             if len(samples) < 2:
                 continue
-            
+
             # 简单统计特征
-            avg_length = sum(len(s.get("original_text", "")) for s in samples) / len(samples)
-            tension_types = [s.get("emotional_tension", "") for s in samples if s.get("emotional_tension")]
-            
+            avg_length = sum(len(s.get("original_text", "")) for s in samples) / len(
+                samples
+            )
+            tension_types = [
+                s.get("emotional_tension", "")
+                for s in samples
+                if s.get("emotional_tension")
+            ]
+
             style_desc = f"本书的{scene}对话特点：平均长度{int(avg_length)}字，"
             if tension_types:
                 style_desc += f"情绪张力类型包括：{'、'.join(tension_types[:3])}"
-            
-            style_summaries.append({
-                "book_name": self.book_name,
-                "category": self.category,
-                "summary_type": "dialogue",
-                "scene_or_desc_type": scene,
-                "style_description": style_desc,
-                "key_features": f"样本数:{len(samples)}",
-            })
+
+            style_summaries.append(
+                {
+                    "book_name": self.book_name,
+                    "category": self.category,
+                    "summary_type": "dialogue",
+                    "scene_or_desc_type": scene,
+                    "style_description": style_desc,
+                    "key_features": f"样本数:{len(samples)}",
+                }
+            )
 
         # 描写风格总结
         desc_by_type = {}
@@ -386,57 +441,96 @@ class StageF(BaseStage):
         for desc_type, samples in desc_by_type.items():
             if len(samples) < 2:
                 continue
-            
-            avg_length = sum(len(s.get("original_text", "")) for s in samples) / len(samples)
-            techniques = [s.get("technique_analysis", "") for s in samples if s.get("technique_analysis")]
-            
+
+            avg_length = sum(len(s.get("original_text", "")) for s in samples) / len(
+                samples
+            )
+            techniques = [
+                s.get("technique_analysis", "")
+                for s in samples
+                if s.get("technique_analysis")
+            ]
+
             style_desc = f"本书的{desc_type}描写特点：平均长度{int(avg_length)}字，"
             if techniques:
                 style_desc += f"常用技法：{'、'.join(techniques[:3])}"
-            
-            style_summaries.append({
-                "book_name": self.book_name,
-                "category": self.category,
-                "summary_type": "description",
-                "scene_or_desc_type": desc_type,
-                "style_description": style_desc,
-                "key_features": f"样本数:{len(samples)}",
-            })
+
+            style_summaries.append(
+                {
+                    "book_name": self.book_name,
+                    "category": self.category,
+                    "summary_type": "description",
+                    "scene_or_desc_type": desc_type,
+                    "style_description": style_desc,
+                    "key_features": f"样本数:{len(samples)}",
+                }
+            )
 
         # 转场风格总结
         transitions = result.get("transition_samples", [])
         if len(transitions) >= 2:
-            trans_types = [t.get("transition_type", "") for t in transitions if t.get("transition_type")]
-            techniques = [t.get("technique_analysis", "") for t in transitions if t.get("technique_analysis")]
-            
-            style_desc = f"本书的转场手法：常用类型包括{'、'.join(set(trans_types[:5]))}，"
+            trans_types = [
+                t.get("transition_type", "")
+                for t in transitions
+                if t.get("transition_type")
+            ]
+            techniques = [
+                t.get("technique_analysis", "")
+                for t in transitions
+                if t.get("technique_analysis")
+            ]
+
+            style_desc = (
+                f"本书的转场手法：常用类型包括{'、'.join(set(trans_types[:5]))}，"
+            )
             if techniques:
                 style_desc += f"技法特点：{'、'.join(techniques[:3])}"
-            
-            style_summaries.append({
-                "book_name": self.book_name,
-                "category": self.category,
-                "summary_type": "transition",
-                "scene_or_desc_type": "转场",
-                "style_description": style_desc,
-                "key_features": f"样本数:{len(transitions)}",
-            })
+
+            style_summaries.append(
+                {
+                    "book_name": self.book_name,
+                    "category": self.category,
+                    "summary_type": "transition",
+                    "scene_or_desc_type": "转场",
+                    "style_description": style_desc,
+                    "key_features": f"样本数:{len(transitions)}",
+                }
+            )
 
         return style_summaries
 
     def insert(self, results: Dict[str, List[Dict]]) -> Dict[str, int]:
         """将 Stage F 结果写入数据库"""
         cursor = self.db.connect().cursor()
-        stats = {"dialogue_samples": 0, "description_samples": 0, "transition_samples": 0, "style_summaries": 0, "narrative_distance": 0, "show_tell_patterns": 0, "action_scene_samples": 0, "climax_excerpts": 0, "chapter_opening_ending_samples": 0, "memorable_quotes": 0}
+        stats = {
+            "dialogue_samples": 0,
+            "description_samples": 0,
+            "transition_samples": 0,
+            "style_summaries": 0,
+            "narrative_distance": 0,
+            "show_tell_patterns": 0,
+            "action_scene_samples": 0,
+            "climax_excerpts": 0,
+            "chapter_opening_ending_samples": 0,
+            "memorable_quotes": 0,
+        }
 
         # 对话样本入库
         for ds in results.get("dialogue_samples", []):
-            ds_id = generate_id(ds["book_name"], ds["chapter_id"], ds["scene_type"], ds["original_text"][:50])
+            ds_id = generate_id(
+                ds["book_name"],
+                ds["chapter_id"],
+                ds["scene_type"],
+                ds["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO dialogue_samples VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    ds_id, ds["book_name"], ds["chapter_id"],
-                    ds["scene_type"], ds["original_text"],
+                    ds_id,
+                    ds["book_name"],
+                    ds["chapter_id"],
+                    ds["scene_type"],
+                    ds["original_text"],
                     ds.get("emotional_tension", ""),
                     ds.get("subtext", ""),
                     ds.get("plot_function", ""),
@@ -462,12 +556,20 @@ class StageF(BaseStage):
 
         # 描写样本入库
         for desc in results.get("description_samples", []):
-            desc_id = generate_id(desc["book_name"], desc["chapter_id"], desc["description_type"], desc["original_text"][:50])
+            desc_id = generate_id(
+                desc["book_name"],
+                desc["chapter_id"],
+                desc["description_type"],
+                desc["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO description_samples VALUES (?,?,?,?,?,?,?)",
                 (
-                    desc_id, desc["book_name"], desc["chapter_id"],
-                    desc["description_type"], desc["original_text"],
+                    desc_id,
+                    desc["book_name"],
+                    desc["chapter_id"],
+                    desc["description_type"],
+                    desc["original_text"],
                     desc.get("technique_analysis", ""),
                     desc.get("sensory_details", ""),
                 ),
@@ -491,12 +593,20 @@ class StageF(BaseStage):
 
         # 转场样本入库
         for trans in results.get("transition_samples", []):
-            trans_id = generate_id(trans["book_name"], trans["chapter_id"], trans["transition_type"], trans["original_text"][:50])
+            trans_id = generate_id(
+                trans["book_name"],
+                trans["chapter_id"],
+                trans["transition_type"],
+                trans["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO transition_samples VALUES (?,?,?,?,?,?)",
                 (
-                    trans_id, trans["book_name"], trans["chapter_id"],
-                    trans["transition_type"], trans["original_text"],
+                    trans_id,
+                    trans["book_name"],
+                    trans["chapter_id"],
+                    trans["transition_type"],
+                    trans["original_text"],
                     trans.get("technique_analysis", ""),
                 ),
             )
@@ -518,13 +628,19 @@ class StageF(BaseStage):
 
         # 风格总结入库
         for ss in results.get("style_summaries", []):
-            ss_id = generate_id(ss["book_name"], ss["summary_type"], ss["scene_or_desc_type"])
+            ss_id = generate_id(
+                ss["book_name"], ss["summary_type"], ss["scene_or_desc_type"]
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO style_summaries VALUES (?,?,?,?,?,?,?)",
                 (
-                    ss_id, ss["book_name"], ss["category"],
-                    ss["summary_type"], ss["scene_or_desc_type"],
-                    ss["style_description"], ss.get("key_features", ""),
+                    ss_id,
+                    ss["book_name"],
+                    ss["category"],
+                    ss["summary_type"],
+                    ss["scene_or_desc_type"],
+                    ss["style_description"],
+                    ss.get("key_features", ""),
                 ),
             )
             stats["style_summaries"] += 1
@@ -535,8 +651,11 @@ class StageF(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO narrative_distance VALUES (?,?,?,?,?,?)",
                 (
-                    nd_id, nd["book_name"], nd["chapter_id"],
-                    nd["distance_type"], nd.get("trigger_reason", ""),
+                    nd_id,
+                    nd["book_name"],
+                    nd["chapter_id"],
+                    nd["distance_type"],
+                    nd.get("trigger_reason", ""),
                     nd.get("original_example", ""),
                 ),
             )
@@ -548,8 +667,11 @@ class StageF(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO show_tell_patterns VALUES (?,?,?,?,?,?,?)",
                 (
-                    st_id, st["book_name"], st["chapter_id"],
-                    st["pattern_type"], st.get("ratio_estimate", ""),
+                    st_id,
+                    st["book_name"],
+                    st["chapter_id"],
+                    st["pattern_type"],
+                    st.get("ratio_estimate", ""),
                     st.get("switching_triggers", ""),
                     st.get("original_example", ""),
                 ),
@@ -558,12 +680,20 @@ class StageF(BaseStage):
 
         # 动作/战斗场景范文入库
         for action in results.get("action_scene_samples", []):
-            action_id = generate_id(action["book_name"], action["chapter_id"], action["action_type"], action["original_text"][:50])
+            action_id = generate_id(
+                action["book_name"],
+                action["chapter_id"],
+                action["action_type"],
+                action["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO action_scene_samples VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    action_id, action["book_name"], action["chapter_id"],
-                    action["action_type"], action["original_text"],
+                    action_id,
+                    action["book_name"],
+                    action["chapter_id"],
+                    action["action_type"],
+                    action["original_text"],
                     action.get("technique_analysis", ""),
                     action.get("pacing_analysis", ""),
                     action.get("sensory_details", ""),
@@ -574,29 +704,44 @@ class StageF(BaseStage):
         # ChromaDB: 动作场景样本
         a_ids, a_docs, a_metas = [], [], []
         for action in results.get("action_scene_samples", []):
-            aid = generate_id(action["book_name"], action["chapter_id"], action["action_type"], action["original_text"][:50])
+            aid = generate_id(
+                action["book_name"],
+                action["chapter_id"],
+                action["action_type"],
+                action["original_text"][:50],
+            )
             a_ids.append(aid)
             a_docs.append(
                 f"动作类型:{action['action_type']}\n原文:{action['original_text']}\n"
                 f"技法:{action.get('technique_analysis', '')}\n"
                 f"节奏:{action.get('pacing_analysis', '')}"
             )
-            a_metas.append({
-                "book_name": action["book_name"],
-                "chapter_id": action["chapter_id"],
-                "action_type": action["action_type"],
-            })
+            a_metas.append(
+                {
+                    "book_name": action["book_name"],
+                    "chapter_id": action["chapter_id"],
+                    "action_type": action["action_type"],
+                }
+            )
         if a_ids:
             self.chroma.upsert_batch("action_scene_samples_kb", a_ids, a_docs, a_metas)
 
         # 高潮段落/名场面原文入库
         for climax in results.get("climax_excerpts", []):
-            climax_id = generate_id(climax["book_name"], climax["chapter_id"], climax["excerpt_type"], climax["original_text"][:50])
+            climax_id = generate_id(
+                climax["book_name"],
+                climax["chapter_id"],
+                climax["excerpt_type"],
+                climax["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO climax_excerpts VALUES (?,?,?,?,?,?,?)",
                 (
-                    climax_id, climax["book_name"], climax["chapter_id"],
-                    climax["excerpt_type"], climax["original_text"],
+                    climax_id,
+                    climax["book_name"],
+                    climax["chapter_id"],
+                    climax["excerpt_type"],
+                    climax["original_text"],
                     climax.get("technique_analysis", ""),
                     climax.get("emotional_impact", ""),
                 ),
@@ -606,29 +751,44 @@ class StageF(BaseStage):
         # ChromaDB: 高潮段落
         c_ids, c_docs, c_metas = [], [], []
         for climax in results.get("climax_excerpts", []):
-            cid = generate_id(climax["book_name"], climax["chapter_id"], climax["excerpt_type"], climax["original_text"][:50])
+            cid = generate_id(
+                climax["book_name"],
+                climax["chapter_id"],
+                climax["excerpt_type"],
+                climax["original_text"][:50],
+            )
             c_ids.append(cid)
             c_docs.append(
                 f"高潮类型:{climax['excerpt_type']}\n原文:{climax['original_text']}\n"
                 f"技法:{climax.get('technique_analysis', '')}\n"
                 f"情感冲击:{climax.get('emotional_impact', '')}"
             )
-            c_metas.append({
-                "book_name": climax["book_name"],
-                "chapter_id": climax["chapter_id"],
-                "excerpt_type": climax["excerpt_type"],
-            })
+            c_metas.append(
+                {
+                    "book_name": climax["book_name"],
+                    "chapter_id": climax["chapter_id"],
+                    "excerpt_type": climax["excerpt_type"],
+                }
+            )
         if c_ids:
             self.chroma.upsert_batch("climax_excerpts_kb", c_ids, c_docs, c_metas)
 
         # 章节开头/结尾范文入库
         for oe in results.get("chapter_opening_ending_samples", []):
-            oe_id = generate_id(oe["book_name"], oe["chapter_id"], oe["sample_position"], oe["original_text"][:50])
+            oe_id = generate_id(
+                oe["book_name"],
+                oe["chapter_id"],
+                oe["sample_position"],
+                oe["original_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO chapter_opening_ending_samples VALUES (?,?,?,?,?,?,?)",
                 (
-                    oe_id, oe["book_name"], oe["chapter_id"],
-                    oe["sample_position"], oe["original_text"],
+                    oe_id,
+                    oe["book_name"],
+                    oe["chapter_id"],
+                    oe["sample_position"],
+                    oe["original_text"],
                     oe.get("technique_analysis", ""),
                     oe.get("hook_type", ""),
                 ),
@@ -637,12 +797,20 @@ class StageF(BaseStage):
 
         # 金句/名句入库
         for quote in results.get("memorable_quotes", []):
-            quote_id = generate_id(quote["book_name"], quote["chapter_id"], quote["quote_type"], quote["quote_text"][:50])
+            quote_id = generate_id(
+                quote["book_name"],
+                quote["chapter_id"],
+                quote["quote_type"],
+                quote["quote_text"][:50],
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO memorable_quotes VALUES (?,?,?,?,?,?,?)",
                 (
-                    quote_id, quote["book_name"], quote["chapter_id"],
-                    quote["quote_text"], quote.get("context", ""),
+                    quote_id,
+                    quote["book_name"],
+                    quote["chapter_id"],
+                    quote["quote_text"],
+                    quote.get("context", ""),
                     quote.get("technique_analysis", ""),
                     quote.get("quote_type", ""),
                 ),
@@ -652,7 +820,12 @@ class StageF(BaseStage):
         # ChromaDB: 金句/名句
         q_ids, q_docs, q_metas = [], [], []
         for quote in results.get("memorable_quotes", []):
-            qid = generate_id(quote["book_name"], quote["chapter_id"], quote["quote_type"], quote["quote_text"][:50])
+            qid = generate_id(
+                quote["book_name"],
+                quote["chapter_id"],
+                quote["quote_type"],
+                quote["quote_text"][:50],
+            )
             q_ids.append(qid)
             q_docs.append(
                 f"金句:{quote['quote_text']}\n"
@@ -660,11 +833,13 @@ class StageF(BaseStage):
                 f"技法:{quote.get('technique_analysis', '')}\n"
                 f"类型:{quote.get('quote_type', '')}"
             )
-            q_metas.append({
-                "book_name": quote["book_name"],
-                "chapter_id": quote["chapter_id"],
-                "quote_type": quote.get("quote_type", ""),
-            })
+            q_metas.append(
+                {
+                    "book_name": quote["book_name"],
+                    "chapter_id": quote["chapter_id"],
+                    "quote_type": quote.get("quote_type", ""),
+                }
+            )
         if q_ids:
             self.chroma.upsert_batch("memorable_quotes_kb", q_ids, q_docs, q_metas)
 

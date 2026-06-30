@@ -1,8 +1,9 @@
 """
 Stage D: 世界观与人物深度自动提取（重做版）
-使用 qwen3:14b 模型，从正文自动提取世界观（7维度）和人物（11维度）
+使用 qwen14b:latest 模型，从正文自动提取世界观（7维度）和人物（11维度）
 不再依赖外挂设定集，采用智能采样策略提高效率
 """
+
 import json
 import logging
 from typing import List, Dict, Any
@@ -35,35 +36,39 @@ class StageD(BaseStage):
             return chapters
 
         sampled_indices = set()
-        
+
         # 首章
         sampled_indices.add(0)
-        
+
         # 尾章
         sampled_indices.add(len(chapters) - 1)
-        
+
         # 每10章取1章
         for i in range(0, len(chapters), 10):
             sampled_indices.add(i)
-        
+
         # 信息密度最高的前20%章节（基于文本长度）
-        chapter_lengths = [(i, len(chap.get("text", ""))) for i, chap in enumerate(chapters)]
+        chapter_lengths = [
+            (i, len(chap.get("text", ""))) for i, chap in enumerate(chapters)
+        ]
         chapter_lengths.sort(key=lambda x: x[1], reverse=True)
         top_20_percent = max(1, len(chapters) // 5)
         for i, _ in chapter_lengths[:top_20_percent]:
             sampled_indices.add(i)
-        
+
         # 按顺序返回
         sampled_indices = sorted(list(sampled_indices))
         sampled_chapters = [chapters[i] for i in sampled_indices]
-        
-        logger.info(f"📊 [阶段D] 智能采样：从 {len(chapters)} 章中选取 {len(sampled_chapters)} 章")
+
+        logger.info(
+            f"📊 [阶段D] 智能采样：从 {len(chapters)} 章中选取 {len(sampled_chapters)} 章"
+        )
         return sampled_chapters
 
     def _extract_world_group(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
         """提取世界观组：world_settings + world_timeline + faction_networks"""
         result = {"world_settings": [], "world_timeline": [], "faction_networks": []}
-        
+
         prompt = f"""你是顶级的文学世界观架构师。请根据本书的实际题材，从以下章节文本中提取【世界观设定（7维度）】、【历史编年史】和【势力关系网络】。
 
 【书名】{self.book_name} 【作者】{self.author} 【分类】{self.category}
@@ -116,55 +121,67 @@ class StageD(BaseStage):
             if data:
                 for ws in data.get("world_settings", []):
                     if isinstance(ws, dict) and ws.get("content"):
-                        result["world_settings"].append({
-                            "book_name": self.book_name,
-                            "author": self.author,
-                            "category": self.category,
-                            "module": ws.get("module", "未知"),
-                            "entity": ws.get("entity", "未知"),
-                            "content": ws.get("content"),
-                            "tags": ws.get("tags", []),
-                            "daily_life": ws.get("daily_life", ""),
-                            "taboos": ws.get("taboos", ""),
-                            "conflict_roots": ws.get("conflict_roots", ""),
-                            "geography": ws.get("geography", ""),
-                            "economy": ws.get("economy", ""),
-                            "culture": ws.get("culture", ""),
-                            "causal_chain": ws.get("causal_chain", ""),
-                            "rules_exceptions": ws.get("rules_exceptions", ""),
-                        })
+                        result["world_settings"].append(
+                            {
+                                "book_name": self.book_name,
+                                "author": self.author,
+                                "category": self.category,
+                                "module": ws.get("module", "未知"),
+                                "entity": ws.get("entity", "未知"),
+                                "content": ws.get("content"),
+                                "tags": ws.get("tags", []),
+                                "daily_life": ws.get("daily_life", ""),
+                                "taboos": ws.get("taboos", ""),
+                                "conflict_roots": ws.get("conflict_roots", ""),
+                                "geography": ws.get("geography", ""),
+                                "economy": ws.get("economy", ""),
+                                "culture": ws.get("culture", ""),
+                                "causal_chain": ws.get("causal_chain", ""),
+                                "rules_exceptions": ws.get("rules_exceptions", ""),
+                            }
+                        )
 
                 for wt in data.get("world_timeline", []):
                     if isinstance(wt, dict) and wt.get("event_name"):
-                        result["world_timeline"].append({
-                            "book_name": self.book_name,
-                            "era_or_year": wt.get("era_or_year", "未知纪元"),
-                            "event_name": wt.get("event_name"),
-                            "event_description": wt.get("event_description", ""),
-                            "impact": wt.get("impact", ""),
-                        })
+                        result["world_timeline"].append(
+                            {
+                                "book_name": self.book_name,
+                                "era_or_year": wt.get("era_or_year", "未知纪元"),
+                                "event_name": wt.get("event_name"),
+                                "event_description": wt.get("event_description", ""),
+                                "impact": wt.get("impact", ""),
+                            }
+                        )
 
                 for fn in data.get("faction_networks", []):
-                    if isinstance(fn, dict) and fn.get("faction_a") and fn.get("faction_b"):
-                        result["faction_networks"].append({
-                            "book_name": self.book_name,
-                            "faction_a": fn.get("faction_a"),
-                            "faction_b": fn.get("faction_b"),
-                            "relation_type": fn.get("relation_type", "未知"),
-                            "relation_detail": fn.get("relation_detail", ""),
-                            "stability": fn.get("stability", ""),
-                            "key_events": fn.get("key_events", ""),
-                        })
+                    if (
+                        isinstance(fn, dict)
+                        and fn.get("faction_a")
+                        and fn.get("faction_b")
+                    ):
+                        result["faction_networks"].append(
+                            {
+                                "book_name": self.book_name,
+                                "faction_a": fn.get("faction_a"),
+                                "faction_b": fn.get("faction_b"),
+                                "relation_type": fn.get("relation_type", "未知"),
+                                "relation_detail": fn.get("relation_detail", ""),
+                                "stability": fn.get("stability", ""),
+                                "key_events": fn.get("key_events", ""),
+                            }
+                        )
         except Exception as e:
             logger.warning(f"⚠️ [阶段D-世界观] 解析章节 {chap_id} 失败: {e}")
             stage_result.add_failure(chap_id, str(e), "D-world")
-        
+
         return result
 
-    def _extract_character_group(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
+    def _extract_character_group(
+        self, text: str, chap_id: str
+    ) -> Dict[str, List[Dict]]:
         """提取人物组：character_profiles（33维度）"""
         result = {"character_profiles": []}
-        
+
         prompt = f"""你是顶级的人物塑造大师。请从以下章节文本中深度提取【人物档案（33维度）】。
 
 【书名】{self.book_name} 【作者】{self.author} 【分类】{self.category}
@@ -216,44 +233,52 @@ class StageD(BaseStage):
             if data:
                 for cp in data.get("character_profiles", []):
                     if isinstance(cp, dict) and cp.get("name"):
-                        result["character_profiles"].append({
-                            "book_name": self.book_name,
-                            "author": self.author,
-                            "category": self.category,
-                            "name": cp.get("name"),
-                            "role_type": cp.get("role_type", "未知"),
-                            "appearance": cp.get("appearance", ""),
-                            "quirks": cp.get("quirks", ""),
-                            "identity": cp.get("identity", ""),
-                            "motivation": cp.get("motivation", ""),
-                            "internal_conflict": cp.get("internal_conflict", ""),
-                            "fatal_flaw": cp.get("fatal_flaw", ""),
-                            "symbolism": cp.get("symbolism", ""),
-                            "climax_or_fate": cp.get("climax_or_fate", ""),
-                            "personality": cp.get("personality", ""),
-                            "relation_to_mc": cp.get("relation_to_mc", "未知"),
-                            "relations_to_others": cp.get("relations_to_others", ""),
-                            "background": cp.get("background", ""),
-                            "desire_vs_need": cp.get("desire_vs_need", ""),
-                            "secrets": cp.get("secrets", ""),
-                            "fears": cp.get("fears", ""),
-                            "social_masks": cp.get("social_masks", ""),
-                            "growth_cost": cp.get("growth_cost", ""),
-                            "speech_samples": cp.get("speech_samples", ""),
-                            "behavior_samples": cp.get("behavior_samples", ""),
-                            "relationship_evolution": cp.get("relationship_evolution", ""),
-                            "abilities": cp.get("abilities", ""),
-                            "arc_trajectory": cp.get("arc_trajectory", ""),
-                            "internal_dilemma": cp.get("internal_dilemma", ""),
-                            "decision_pattern": cp.get("decision_pattern", ""),
-                            "cognitive_bias": cp.get("cognitive_bias", ""),
-                            "transformation_trigger": cp.get("transformation_trigger", ""),
-                            "contrast_design": cp.get("contrast_design", ""),
-                        })
+                        result["character_profiles"].append(
+                            {
+                                "book_name": self.book_name,
+                                "author": self.author,
+                                "category": self.category,
+                                "name": cp.get("name"),
+                                "role_type": cp.get("role_type", "未知"),
+                                "appearance": cp.get("appearance", ""),
+                                "quirks": cp.get("quirks", ""),
+                                "identity": cp.get("identity", ""),
+                                "motivation": cp.get("motivation", ""),
+                                "internal_conflict": cp.get("internal_conflict", ""),
+                                "fatal_flaw": cp.get("fatal_flaw", ""),
+                                "symbolism": cp.get("symbolism", ""),
+                                "climax_or_fate": cp.get("climax_or_fate", ""),
+                                "personality": cp.get("personality", ""),
+                                "relation_to_mc": cp.get("relation_to_mc", "未知"),
+                                "relations_to_others": cp.get(
+                                    "relations_to_others", ""
+                                ),
+                                "background": cp.get("background", ""),
+                                "desire_vs_need": cp.get("desire_vs_need", ""),
+                                "secrets": cp.get("secrets", ""),
+                                "fears": cp.get("fears", ""),
+                                "social_masks": cp.get("social_masks", ""),
+                                "growth_cost": cp.get("growth_cost", ""),
+                                "speech_samples": cp.get("speech_samples", ""),
+                                "behavior_samples": cp.get("behavior_samples", ""),
+                                "relationship_evolution": cp.get(
+                                    "relationship_evolution", ""
+                                ),
+                                "abilities": cp.get("abilities", ""),
+                                "arc_trajectory": cp.get("arc_trajectory", ""),
+                                "internal_dilemma": cp.get("internal_dilemma", ""),
+                                "decision_pattern": cp.get("decision_pattern", ""),
+                                "cognitive_bias": cp.get("cognitive_bias", ""),
+                                "transformation_trigger": cp.get(
+                                    "transformation_trigger", ""
+                                ),
+                                "contrast_design": cp.get("contrast_design", ""),
+                            }
+                        )
         except Exception as e:
             logger.warning(f"⚠️ [阶段D-人物] 解析章节 {chap_id} 失败: {e}")
             stage_result.add_failure(chap_id, str(e), "D-character")
-        
+
         return result
 
     def run(self, chapters: List[Dict], **kwargs) -> Dict[str, List[Dict]]:
@@ -315,7 +340,12 @@ class StageD(BaseStage):
     def insert(self, results: Dict[str, List[Dict]]) -> Dict[str, int]:
         """将 Stage D 结果写入数据库"""
         cursor = self.db.connect().cursor()
-        stats = {"world_settings": 0, "character_profiles": 0, "world_timeline": 0, "faction_networks": 0}
+        stats = {
+            "world_settings": 0,
+            "character_profiles": 0,
+            "world_timeline": 0,
+            "faction_networks": 0,
+        }
 
         # 世界观入库（16个字段）
         for ws in results.get("world_settings", []):
@@ -323,12 +353,20 @@ class StageD(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO world_settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    ws_id, ws["book_name"], ws["author"], ws["category"],
-                    ws["module"], ws["entity"], ws["content"],
+                    ws_id,
+                    ws["book_name"],
+                    ws["author"],
+                    ws["category"],
+                    ws["module"],
+                    ws["entity"],
+                    ws["content"],
                     "|".join(ws.get("tags", [])),
-                    ws.get("daily_life", ""), ws.get("taboos", ""),
-                    ws.get("conflict_roots", ""), ws.get("geography", ""),
-                    ws.get("economy", ""), ws.get("culture", ""),
+                    ws.get("daily_life", ""),
+                    ws.get("taboos", ""),
+                    ws.get("conflict_roots", ""),
+                    ws.get("geography", ""),
+                    ws.get("economy", ""),
+                    ws.get("culture", ""),
                     ws.get("causal_chain", ""),
                     ws.get("rules_exceptions", ""),
                 ),
@@ -349,7 +387,14 @@ class StageD(BaseStage):
             results.get("world_settings", []),
             id_fields=["book_name", "module", "entity"],
             text_field="_chroma_text",
-            metadata_fields=["book_name", "author", "category", "module", "entity", "tags"],
+            metadata_fields=[
+                "book_name",
+                "author",
+                "category",
+                "module",
+                "entity",
+                "tags",
+            ],
         )
 
         # 人物档案入库（33个字段）
@@ -358,18 +403,30 @@ class StageD(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    cp_id, cp["book_name"], cp["author"], cp["category"],
-                    cp["name"], cp.get("role_type", "未知"),
-                    cp.get("appearance", ""), cp.get("quirks", ""),
-                    cp.get("identity", ""), cp.get("motivation", ""),
-                    cp.get("internal_conflict", ""), cp.get("fatal_flaw", ""),
-                    cp.get("symbolism", ""), cp.get("personality", ""),
+                    cp_id,
+                    cp["book_name"],
+                    cp["author"],
+                    cp["category"],
+                    cp["name"],
+                    cp.get("role_type", "未知"),
+                    cp.get("appearance", ""),
+                    cp.get("quirks", ""),
+                    cp.get("identity", ""),
+                    cp.get("motivation", ""),
+                    cp.get("internal_conflict", ""),
+                    cp.get("fatal_flaw", ""),
+                    cp.get("symbolism", ""),
+                    cp.get("personality", ""),
                     cp.get("relation_to_mc", "未知"),
                     cp.get("relations_to_others", ""),
-                    cp.get("climax_or_fate", ""), cp.get("background", ""),
-                    cp.get("desire_vs_need", ""), cp.get("secrets", ""),
-                    cp.get("fears", ""), cp.get("social_masks", ""),
-                    cp.get("growth_cost", ""), cp.get("speech_samples", ""),
+                    cp.get("climax_or_fate", ""),
+                    cp.get("background", ""),
+                    cp.get("desire_vs_need", ""),
+                    cp.get("secrets", ""),
+                    cp.get("fears", ""),
+                    cp.get("social_masks", ""),
+                    cp.get("growth_cost", ""),
+                    cp.get("speech_samples", ""),
                     cp.get("behavior_samples", ""),
                     cp.get("relationship_evolution", ""),
                     cp.get("abilities", ""),
@@ -429,8 +486,12 @@ class StageD(BaseStage):
             cursor.execute(
                 "INSERT OR IGNORE INTO world_timeline VALUES (?,?,?,?,?,?)",
                 (
-                    wt_id, wt["book_name"], wt["era_or_year"],
-                    wt["event_name"], wt["event_description"], wt["impact"],
+                    wt_id,
+                    wt["book_name"],
+                    wt["era_or_year"],
+                    wt["event_name"],
+                    wt["event_description"],
+                    wt["impact"],
                 ),
             )
             stats["world_timeline"] += 1
@@ -441,8 +502,10 @@ class StageD(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO faction_networks VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    fn_id, fn["book_name"],
-                    fn["faction_a"], fn["faction_b"],
+                    fn_id,
+                    fn["book_name"],
+                    fn["faction_a"],
+                    fn["faction_b"],
                     fn.get("relation_type", ""),
                     fn.get("relation_detail", ""),
                     fn.get("stability", ""),

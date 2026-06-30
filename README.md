@@ -156,14 +156,21 @@ Skill 将标杆知识与初稿对比，完善/打磨/优化创作内容
 ```bash
 ollama pull qwen2.5:3b
 ollama pull qwen2.5:7b
-ollama pull qwen3:14b
+ollama pull qwen14b:latest
 ```
 
 ## 模型分配策略
 
-| Stage D | 世界观/人物/编年史 | qwen3:14b | 2 |
-| Stage E | 宏观大纲/卷节拍 | qwen3:14b | 2 |
-| Stage F | 多类型样本库 | qwen3:14b | 2 |
+| Stage D | 世界观/人物/编年史 | qwen14b:latest | 2 |
+| Stage E | 宏观大纲/卷节拍 | qwen14b:latest | 2 |
+| Stage F | 多类型样本库 | qwen14b:latest | 2 |
+
+## 进入你的项目目录并创建虚拟环境
+```bash
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
 
 ## 安装
 

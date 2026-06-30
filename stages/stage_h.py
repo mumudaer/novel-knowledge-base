@@ -1,7 +1,8 @@
 """
 Stage H: 全书级宏观分析
-使用 qwen3:14b 模型，提取三幕结构、主线支线、情感曲线、高潮/张力点分布、象征体系
+使用 qwen14b:latest 模型，提取三幕结构、主线支线、情感曲线、高潮/张力点分布、象征体系
 """
+
 import json
 import logging
 from typing import List, Dict, Any
@@ -64,10 +65,12 @@ class StageH(BaseStage):
             return result
 
         # 构建全书摘要文本
-        summaries_text = "\n".join([
-            f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
-            for ch in stage_a_res
-        ])
+        summaries_text = "\n".join(
+            [
+                f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
+                for ch in stage_a_res
+            ]
+        )
         if len(summaries_text) > 8000:
             summaries_text = summaries_text[:8000] + "\n...(截断)"
 
@@ -81,31 +84,53 @@ class StageH(BaseStage):
 
         # 分三组顺序调用，前一组结果作为上下文传递给后续组
         logger.info("📊 [阶段H] 开始分组提取（结构组/技法组/类型组）...")
-        
+
         # 第一组：结构组
         structure_data = self._extract_structure_group(summaries_text, volumes_text)
-        for key in ["book_structure", "plot_lines", "emotional_arc", "climax_point_distribution", "symbol_system"]:
+        for key in [
+            "book_structure",
+            "plot_lines",
+            "emotional_arc",
+            "climax_point_distribution",
+            "symbol_system",
+        ]:
             if key in structure_data:
                 result[key] = structure_data[key]
-        
+
         # 构建结构组摘要，供后续组参考
         structure_context = self._build_group_context(structure_data)
-        
+
         # 第二组：技法组（传入结构组上下文）
-        technique_data = self._extract_technique_group(summaries_text, volumes_text, structure_context)
-        for key in ["revelation_pacing", "chapter_patterns", "emotion_transition_patterns", 
-                    "information_management", "climax_buildup_chains", "conflict_escalation"]:
+        technique_data = self._extract_technique_group(
+            summaries_text, volumes_text, structure_context
+        )
+        for key in [
+            "revelation_pacing",
+            "chapter_patterns",
+            "emotion_transition_patterns",
+            "information_management",
+            "climax_buildup_chains",
+            "conflict_escalation",
+        ]:
             if key in technique_data:
                 result[key] = technique_data[key]
-        
+
         # 构建技法组摘要，供类型组参考
         technique_context = self._build_group_context(technique_data)
         combined_context = structure_context + "\n" + technique_context
-        
+
         # 第三组：类型组（传入结构组+技法组上下文）
-        genre_data = self._extract_genre_group(summaries_text, volumes_text, combined_context)
-        for key in ["romance_lines", "mystery_clues", "fear_building", "progression_systems", 
-                    "genre_specific_techniques", "pov_switching_patterns"]:
+        genre_data = self._extract_genre_group(
+            summaries_text, volumes_text, combined_context
+        )
+        for key in [
+            "romance_lines",
+            "mystery_clues",
+            "fear_building",
+            "progression_systems",
+            "genre_specific_techniques",
+            "pov_switching_patterns",
+        ]:
             if key in genre_data:
                 result[key] = genre_data[key]
 
@@ -154,65 +179,75 @@ class StageH(BaseStage):
                 )
 
             graph.save()
-            logger.info(f"📊 [阶段H] 知识图谱已更新 {len(result.get('plot_lines', []))} 个剧情线节点")
+            logger.info(
+                f"📊 [阶段H] 知识图谱已更新 {len(result.get('plot_lines', []))} 个剧情线节点"
+            )
         except Exception as e:
             logger.warning(f"⚠️ [阶段H] 知识图谱更新失败: {e}")
 
     def _build_group_context(self, group_data: Dict[str, List[Dict]]) -> str:
         """构建前一组的分析摘要，供后续组参考"""
         context_lines = ["【前序分析结果摘要】"]
-        
+
         for key, items in group_data.items():
             if not items:
                 continue
-            
+
             if key == "book_structure" and items:
                 struct = items[0]
-                context_lines.append(f"- 结构类型: {struct.get('structure_type', '未知')}")
+                context_lines.append(
+                    f"- 结构类型: {struct.get('structure_type', '未知')}"
+                )
                 context_lines.append(f"- 表层主题: {struct.get('surface_theme', '')}")
                 context_lines.append(f"- 深层主题: {struct.get('deep_theme', '')}")
-            
+
             elif key == "plot_lines":
                 main_plots = [p for p in items if p.get("line_type") == "main"]
                 if main_plots:
-                    context_lines.append(f"- 主线主题: {main_plots[0].get('theme', '')}")
-                context_lines.append(f"- 支线数量: {len([p for p in items if p.get('line_type') == 'subplot'])}")
-            
+                    context_lines.append(
+                        f"- 主线主题: {main_plots[0].get('theme', '')}"
+                    )
+                context_lines.append(
+                    f"- 支线数量: {len([p for p in items if p.get('line_type') == 'subplot'])}"
+                )
+
             elif key == "emotional_arc" and items:
                 arc_data = items[0].get("arc_data", [])
                 if arc_data:
                     emotions = [a.get("dominant_emotion", "") for a in arc_data[:3]]
                     context_lines.append(f"- 主要情感阶段: {', '.join(emotions)}")
-            
+
             elif key == "climax_point_distribution" and items:
                 dist = items[0]
                 climax_points = dist.get("distribution", [])
                 context_lines.append(f"- 高潮点数量: {len(climax_points)}")
                 context_lines.append(f"- 节奏模式: {dist.get('rhythm_pattern', '')}")
-            
+
             elif key == "symbol_system" and items:
                 symbols = items[0].get("symbols", [])
                 symbol_names = [s.get("symbol", "") for s in symbols[:3]]
                 context_lines.append(f"- 核心象征: {', '.join(symbol_names)}")
-            
+
             elif key == "information_management":
                 strategies = [item.get("strategy_type", "") for item in items[:3]]
                 context_lines.append(f"- 信息管理策略: {', '.join(strategies)}")
-            
+
             elif key == "climax_buildup_chains":
                 climax_names = [item.get("climax_name", "") for item in items[:3]]
                 context_lines.append(f"- 主要高潮: {', '.join(climax_names)}")
-            
+
             elif key == "conflict_escalation":
                 conflict_lines = [item.get("conflict_line", "") for item in items[:3]]
                 context_lines.append(f"- 冲突线: {', '.join(conflict_lines)}")
-        
+
         if len(context_lines) == 1:
             return ""
-        
+
         return "\n".join(context_lines)
 
-    def _extract_structure_group(self, summaries_text: str, volumes_text: str) -> Dict[str, List[Dict]]:
+    def _extract_structure_group(
+        self, summaries_text: str, volumes_text: str
+    ) -> Dict[str, List[Dict]]:
         """提取结构组：book_structure, plot_lines, emotional_arc, climax_point_distribution, symbol_system"""
         result = {}
         prompt = f"""你是顶级的文学评论家。请根据《{self.book_name}》({self.category})的全书摘要和卷大纲，分析全书结构。
@@ -290,65 +325,83 @@ class StageH(BaseStage):
             if data:
                 structure = data.get("book_structure", {})
                 if structure:
-                    result["book_structure"] = [{
-                        "book_name": self.book_name,
-                        "structure_type": structure.get("structure_type", "未知"),
-                        "surface_theme": structure.get("surface_theme", ""),
-                        "deep_theme": structure.get("deep_theme", ""),
-                        "act_breakdown": structure.get("act_breakdown", []),
-                    }]
+                    result["book_structure"] = [
+                        {
+                            "book_name": self.book_name,
+                            "structure_type": structure.get("structure_type", "未知"),
+                            "surface_theme": structure.get("surface_theme", ""),
+                            "deep_theme": structure.get("deep_theme", ""),
+                            "act_breakdown": structure.get("act_breakdown", []),
+                        }
+                    ]
 
                 plot_lines = data.get("plot_lines", {})
                 if plot_lines:
                     result["plot_lines"] = []
                     main_plot = plot_lines.get("main_plot", {})
                     if main_plot:
-                        result["plot_lines"].append({
-                            "book_name": self.book_name,
-                            "line_type": "main",
-                            "theme": main_plot.get("theme", ""),
-                            "chapter_distribution": main_plot.get("chapter_distribution", ""),
-                            "milestones": main_plot.get("key_milestones", []),
-                        })
+                        result["plot_lines"].append(
+                            {
+                                "book_name": self.book_name,
+                                "line_type": "main",
+                                "theme": main_plot.get("theme", ""),
+                                "chapter_distribution": main_plot.get(
+                                    "chapter_distribution", ""
+                                ),
+                                "milestones": main_plot.get("key_milestones", []),
+                            }
+                        )
                     for subplot in plot_lines.get("subplots", []):
-                        result["plot_lines"].append({
-                            "book_name": self.book_name,
-                            "line_type": "subplot",
-                            "theme": subplot.get("theme", ""),
-                            "chapter_distribution": subplot.get("chapter_distribution", ""),
-                            "milestones": subplot.get("key_milestones", []),
-                            "name": subplot.get("name", ""),
-                        })
+                        result["plot_lines"].append(
+                            {
+                                "book_name": self.book_name,
+                                "line_type": "subplot",
+                                "theme": subplot.get("theme", ""),
+                                "chapter_distribution": subplot.get(
+                                    "chapter_distribution", ""
+                                ),
+                                "milestones": subplot.get("key_milestones", []),
+                                "name": subplot.get("name", ""),
+                            }
+                        )
 
                 emotional_arc = data.get("emotional_arc", [])
                 if emotional_arc:
-                    result["emotional_arc"] = [{"book_name": self.book_name, "arc_data": emotional_arc}]
+                    result["emotional_arc"] = [
+                        {"book_name": self.book_name, "arc_data": emotional_arc}
+                    ]
 
                 climax_points = data.get("climax_point_distribution", {})
                 if climax_points:
-                    result["climax_point_distribution"] = [{
-                        "book_name": self.book_name,
-                        "distribution": climax_points.get("climax_points", []),
-                        "rhythm_pattern": climax_points.get("rhythm_pattern", ""),
-                    }]
+                    result["climax_point_distribution"] = [
+                        {
+                            "book_name": self.book_name,
+                            "distribution": climax_points.get("climax_points", []),
+                            "rhythm_pattern": climax_points.get("rhythm_pattern", ""),
+                        }
+                    ]
 
                 symbols = data.get("symbol_system", [])
                 if symbols:
-                    result["symbol_system"] = [{"book_name": self.book_name, "symbols": symbols}]
+                    result["symbol_system"] = [
+                        {"book_name": self.book_name, "symbols": symbols}
+                    ]
         except Exception as e:
             logger.warning(f"⚠️ [阶段H] 结构组提取失败: {e}")
 
         return result
 
-    def _extract_technique_group(self, summaries_text: str, volumes_text: str, prior_context: str = "") -> Dict[str, List[Dict]]:
+    def _extract_technique_group(
+        self, summaries_text: str, volumes_text: str, prior_context: str = ""
+    ) -> Dict[str, List[Dict]]:
         """提取技法组：revelation_pacing, chapter_patterns, emotion_transition_patterns, information_management, climax_buildup_chains, conflict_escalation"""
         result = {}
-        
+
         # 构建包含前序分析结果的 Prompt
         prior_section = ""
         if prior_context:
             prior_section = f"\n{prior_context}\n请参考以上结构分析结果，确保技法分析与结构分析保持一致。\n"
-        
+
         prompt = f"""你是顶级的文学评论家。请根据《{self.book_name}》({self.category})的全书摘要和卷大纲，分析写作技法。
 
 【书名】{self.book_name} 【分类】{self.category}
@@ -417,87 +470,117 @@ class StageH(BaseStage):
                     result["revelation_pacing"] = []
                     for rev in revelations:
                         if isinstance(rev, dict) and rev.get("revelation_name"):
-                            result["revelation_pacing"].append({
-                                "book_name": self.book_name,
-                                "revelation_name": rev.get("revelation_name"),
-                                "reveal_chapter": rev.get("reveal_chapter", ""),
-                                "reveal_method": rev.get("reveal_method", ""),
-                                "impact": rev.get("impact", ""),
-                            })
+                            result["revelation_pacing"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "revelation_name": rev.get("revelation_name"),
+                                    "reveal_chapter": rev.get("reveal_chapter", ""),
+                                    "reveal_method": rev.get("reveal_method", ""),
+                                    "impact": rev.get("impact", ""),
+                                }
+                            )
 
                 chapter_patterns = data.get("chapter_patterns", {})
                 if chapter_patterns:
-                    result["chapter_patterns"] = [{
-                        "book_name": self.book_name,
-                        "opening_patterns": chapter_patterns.get("opening_patterns", []),
-                        "ending_patterns": chapter_patterns.get("ending_patterns", []),
-                        "common_transitions": chapter_patterns.get("common_transitions", []),
-                    }]
+                    result["chapter_patterns"] = [
+                        {
+                            "book_name": self.book_name,
+                            "opening_patterns": chapter_patterns.get(
+                                "opening_patterns", []
+                            ),
+                            "ending_patterns": chapter_patterns.get(
+                                "ending_patterns", []
+                            ),
+                            "common_transitions": chapter_patterns.get(
+                                "common_transitions", []
+                            ),
+                        }
+                    ]
 
                 emotion_transitions = data.get("emotion_transition_patterns", [])
                 if emotion_transitions:
                     result["emotion_transition_patterns"] = []
                     for et in emotion_transitions:
                         if isinstance(et, dict) and et.get("transition_type"):
-                            result["emotion_transition_patterns"].append({
-                                "book_name": self.book_name,
-                                "transition_type": et.get("transition_type"),
-                                "foreshadowing_method": et.get("foreshadowing_method", ""),
-                                "original_example": et.get("original_example", ""),
-                            })
+                            result["emotion_transition_patterns"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "transition_type": et.get("transition_type"),
+                                    "foreshadowing_method": et.get(
+                                        "foreshadowing_method", ""
+                                    ),
+                                    "original_example": et.get("original_example", ""),
+                                }
+                            )
 
                 info_mgmt = data.get("information_management", [])
                 if info_mgmt:
                     result["information_management"] = []
                     for im in info_mgmt:
-                        if isinstance(im, dict) and im.get("strategy_type") and im.get("target_info"):
-                            result["information_management"].append({
-                                "book_name": self.book_name,
-                                "strategy_type": im.get("strategy_type"),
-                                "target_info": im.get("target_info"),
-                                "conceal_method": im.get("conceal_method", ""),
-                                "reveal_timing": im.get("reveal_timing", ""),
-                                "dramatic_purpose": im.get("dramatic_purpose", ""),
-                            })
+                        if (
+                            isinstance(im, dict)
+                            and im.get("strategy_type")
+                            and im.get("target_info")
+                        ):
+                            result["information_management"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "strategy_type": im.get("strategy_type"),
+                                    "target_info": im.get("target_info"),
+                                    "conceal_method": im.get("conceal_method", ""),
+                                    "reveal_timing": im.get("reveal_timing", ""),
+                                    "dramatic_purpose": im.get("dramatic_purpose", ""),
+                                }
+                            )
 
                 climax_chains = data.get("climax_buildup_chains", [])
                 if climax_chains:
                     result["climax_buildup_chains"] = []
                     for cc in climax_chains:
                         if isinstance(cc, dict) and cc.get("climax_name"):
-                            result["climax_buildup_chains"].append({
-                                "book_name": self.book_name,
-                                "climax_name": cc.get("climax_name"),
-                                "climax_chapter": cc.get("climax_chapter", ""),
-                                "buildup_steps": cc.get("buildup_steps", []),
-                                "tension_escalation": cc.get("tension_escalation", ""),
-                            })
+                            result["climax_buildup_chains"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "climax_name": cc.get("climax_name"),
+                                    "climax_chapter": cc.get("climax_chapter", ""),
+                                    "buildup_steps": cc.get("buildup_steps", []),
+                                    "tension_escalation": cc.get(
+                                        "tension_escalation", ""
+                                    ),
+                                }
+                            )
 
                 conflict_esc = data.get("conflict_escalation", [])
                 if conflict_esc:
                     result["conflict_escalation"] = []
                     for ce in conflict_esc:
                         if isinstance(ce, dict) and ce.get("conflict_line"):
-                            result["conflict_escalation"].append({
-                                "book_name": self.book_name,
-                                "conflict_line": ce.get("conflict_line"),
-                                "escalation_steps": ce.get("escalation_steps", []),
-                                "escalation_pattern": ce.get("escalation_pattern", ""),
-                            })
+                            result["conflict_escalation"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "conflict_line": ce.get("conflict_line"),
+                                    "escalation_steps": ce.get("escalation_steps", []),
+                                    "escalation_pattern": ce.get(
+                                        "escalation_pattern", ""
+                                    ),
+                                }
+                            )
         except Exception as e:
             logger.warning(f"⚠️ [阶段H] 技法组提取失败: {e}")
 
         return result
 
-    def _extract_genre_group(self, summaries_text: str, volumes_text: str, prior_context: str = "") -> Dict[str, List[Dict]]:
+    def _extract_genre_group(
+        self, summaries_text: str, volumes_text: str, prior_context: str = ""
+    ) -> Dict[str, List[Dict]]:
         """提取类型组：romance_lines, mystery_clues, fear_building, progression_systems, genre_specific_techniques, pov_switching_patterns"""
         result = {}
-        
+
         # 构建包含前序分析结果的 Prompt
         prior_section = ""
         if prior_context:
             prior_section = f"\n{prior_context}\n请参考以上结构和技法分析结果，确保类型元素分析与前序分析保持一致。\n"
-        
+
         prompt = f"""你是顶级的文学评论家。请根据《{self.book_name}》({self.category})的全书摘要和卷大纲，分析类型特定元素。
 
 【书名】{self.book_name} 【分类】{self.category}
@@ -584,92 +667,120 @@ class StageH(BaseStage):
                     result["romance_lines"] = []
                     for rl in romance:
                         if isinstance(rl, dict) and rl.get("couple_a"):
-                            result["romance_lines"].append({
-                                "book_name": self.book_name,
-                                "couple_a": rl.get("couple_a"),
-                                "couple_b": rl.get("couple_b", ""),
-                                "line_type": rl.get("line_type", ""),
-                                "development_stages": rl.get("development_stages", []),
-                                "sweet_points": rl.get("sweet_points", []),
-                                "angst_points": rl.get("angst_points", []),
-                                "interaction_patterns": rl.get("interaction_patterns", []),
-                                "resolution": rl.get("resolution", ""),
-                            })
+                            result["romance_lines"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "couple_a": rl.get("couple_a"),
+                                    "couple_b": rl.get("couple_b", ""),
+                                    "line_type": rl.get("line_type", ""),
+                                    "development_stages": rl.get(
+                                        "development_stages", []
+                                    ),
+                                    "sweet_points": rl.get("sweet_points", []),
+                                    "angst_points": rl.get("angst_points", []),
+                                    "interaction_patterns": rl.get(
+                                        "interaction_patterns", []
+                                    ),
+                                    "resolution": rl.get("resolution", ""),
+                                }
+                            )
 
                 mystery = data.get("mystery_clues", [])
                 if mystery:
                     result["mystery_clues"] = []
                     for mc in mystery:
                         if isinstance(mc, dict) and mc.get("clue_name"):
-                            result["mystery_clues"].append({
-                                "book_name": self.book_name,
-                                "clue_name": mc.get("clue_name"),
-                                "clue_type": mc.get("clue_type", ""),
-                                "planted_chapter": mc.get("planted_chapter", ""),
-                                "payoff_chapter": mc.get("payoff_chapter", ""),
-                                "red_herring": mc.get("red_herring", 0),
-                                "misdirection_method": mc.get("misdirection_method", ""),
-                                "reasoning_chain": mc.get("reasoning_chain", []),
-                                "twist_design": mc.get("twist_design", ""),
-                            })
+                            result["mystery_clues"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "clue_name": mc.get("clue_name"),
+                                    "clue_type": mc.get("clue_type", ""),
+                                    "planted_chapter": mc.get("planted_chapter", ""),
+                                    "payoff_chapter": mc.get("payoff_chapter", ""),
+                                    "red_herring": mc.get("red_herring", 0),
+                                    "misdirection_method": mc.get(
+                                        "misdirection_method", ""
+                                    ),
+                                    "reasoning_chain": mc.get("reasoning_chain", []),
+                                    "twist_design": mc.get("twist_design", ""),
+                                }
+                            )
 
                 fear = data.get("fear_building", [])
                 if fear:
                     result["fear_building"] = []
                     for fb in fear:
                         if isinstance(fb, dict) and fb.get("fear_type"):
-                            result["fear_building"].append({
-                                "book_name": self.book_name,
-                                "fear_type": fb.get("fear_type"),
-                                "building_steps": fb.get("building_steps", []),
-                                "atmosphere_techniques": fb.get("atmosphere_techniques", []),
-                                "climax_moment": fb.get("climax_moment", ""),
-                                "original_example": fb.get("original_example", ""),
-                            })
+                            result["fear_building"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "fear_type": fb.get("fear_type"),
+                                    "building_steps": fb.get("building_steps", []),
+                                    "atmosphere_techniques": fb.get(
+                                        "atmosphere_techniques", []
+                                    ),
+                                    "climax_moment": fb.get("climax_moment", ""),
+                                    "original_example": fb.get("original_example", ""),
+                                }
+                            )
 
                 progression = data.get("progression_systems", [])
                 if progression:
                     result["progression_systems"] = []
                     for ps in progression:
                         if isinstance(ps, dict) and ps.get("system_type"):
-                            result["progression_systems"].append({
-                                "book_name": self.book_name,
-                                "system_type": ps.get("system_type"),
-                                "levels": ps.get("levels", []),
-                                "upgrade_conditions": ps.get("upgrade_conditions", []),
-                                "power_comparison": ps.get("power_comparison", []),
-                                "milestones": ps.get("milestones", []),
-                                "growth_pattern": ps.get("growth_pattern", ""),
-                            })
+                            result["progression_systems"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "system_type": ps.get("system_type"),
+                                    "levels": ps.get("levels", []),
+                                    "upgrade_conditions": ps.get(
+                                        "upgrade_conditions", []
+                                    ),
+                                    "power_comparison": ps.get("power_comparison", []),
+                                    "milestones": ps.get("milestones", []),
+                                    "growth_pattern": ps.get("growth_pattern", ""),
+                                }
+                            )
 
                 genre_tech = data.get("genre_specific_techniques", [])
                 if genre_tech:
                     result["genre_specific_techniques"] = []
                     for gt in genre_tech:
                         if isinstance(gt, dict) and gt.get("technique_name"):
-                            result["genre_specific_techniques"].append({
-                                "book_name": self.book_name,
-                                "genre_tag": gt.get("genre_tag", self.category),
-                                "technique_name": gt.get("technique_name"),
-                                "technique_category": gt.get("technique_category", ""),
-                                "analysis": gt.get("analysis", ""),
-                                "original_example": gt.get("original_example", ""),
-                                "applicable_scenarios": gt.get("applicable_scenarios", ""),
-                            })
+                            result["genre_specific_techniques"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "genre_tag": gt.get("genre_tag", self.category),
+                                    "technique_name": gt.get("technique_name"),
+                                    "technique_category": gt.get(
+                                        "technique_category", ""
+                                    ),
+                                    "analysis": gt.get("analysis", ""),
+                                    "original_example": gt.get("original_example", ""),
+                                    "applicable_scenarios": gt.get(
+                                        "applicable_scenarios", ""
+                                    ),
+                                }
+                            )
 
                 pov_patterns = data.get("pov_switching_patterns", [])
                 if pov_patterns:
                     result["pov_switching_patterns"] = []
                     for pp in pov_patterns:
                         if isinstance(pp, dict) and pp.get("pattern_type"):
-                            result["pov_switching_patterns"].append({
-                                "book_name": self.book_name,
-                                "pattern_type": pp.get("pattern_type"),
-                                "pov_characters": pp.get("pov_characters", []),
-                                "switching_triggers": pp.get("switching_triggers", ""),
-                                "frequency": pp.get("frequency", ""),
-                                "original_example": pp.get("original_example", ""),
-                            })
+                            result["pov_switching_patterns"].append(
+                                {
+                                    "book_name": self.book_name,
+                                    "pattern_type": pp.get("pattern_type"),
+                                    "pov_characters": pp.get("pov_characters", []),
+                                    "switching_triggers": pp.get(
+                                        "switching_triggers", ""
+                                    ),
+                                    "frequency": pp.get("frequency", ""),
+                                    "original_example": pp.get("original_example", ""),
+                                }
+                            )
         except Exception as e:
             logger.warning(f"⚠️ [阶段H] 类型组提取失败: {e}")
 
@@ -704,7 +815,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO book_structure VALUES (?,?,?,?,?,?)",
                 (
-                    bs_id, bs["book_name"],
+                    bs_id,
+                    bs["book_name"],
                     bs.get("structure_type", ""),
                     json.dumps(bs.get("act_breakdown", []), ensure_ascii=False),
                     bs.get("surface_theme", ""),
@@ -719,8 +831,10 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO plot_lines VALUES (?,?,?,?,?,?)",
                 (
-                    pl_id, pl["book_name"],
-                    pl["line_type"], pl.get("theme", ""),
+                    pl_id,
+                    pl["book_name"],
+                    pl["line_type"],
+                    pl.get("theme", ""),
                     pl.get("chapter_distribution", ""),
                     json.dumps(pl.get("milestones", []), ensure_ascii=False),
                 ),
@@ -733,7 +847,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO emotional_arc VALUES (?,?,?)",
                 (
-                    ea_id, ea["book_name"],
+                    ea_id,
+                    ea["book_name"],
                     json.dumps(ea.get("arc_data", []), ensure_ascii=False),
                 ),
             )
@@ -745,7 +860,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO climax_point_distribution VALUES (?,?,?,?)",
                 (
-                    cpd_id, cpd["book_name"],
+                    cpd_id,
+                    cpd["book_name"],
                     json.dumps(cpd.get("distribution", []), ensure_ascii=False),
                     cpd.get("rhythm_pattern", ""),
                 ),
@@ -758,7 +874,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO symbol_system VALUES (?,?,?)",
                 (
-                    ss_id, ss["book_name"],
+                    ss_id,
+                    ss["book_name"],
                     json.dumps(ss.get("symbols", []), ensure_ascii=False),
                 ),
             )
@@ -766,13 +883,18 @@ class StageH(BaseStage):
 
         # 信息揭露节奏入库
         for rev in results.get("revelation_pacing", []):
-            rev_id = generate_id(rev["book_name"], rev["revelation_name"], rev.get("reveal_chapter", ""))
+            rev_id = generate_id(
+                rev["book_name"], rev["revelation_name"], rev.get("reveal_chapter", "")
+            )
             cursor.execute(
                 "INSERT OR REPLACE INTO revelation_pacing VALUES (?,?,?,?,?,?)",
                 (
-                    rev_id, rev["book_name"],
-                    rev["revelation_name"], rev.get("reveal_chapter", ""),
-                    rev.get("reveal_method", ""), rev.get("impact", ""),
+                    rev_id,
+                    rev["book_name"],
+                    rev["revelation_name"],
+                    rev.get("reveal_chapter", ""),
+                    rev.get("reveal_method", ""),
+                    rev.get("impact", ""),
                 ),
             )
             stats["revelation_pacing"] += 1
@@ -783,7 +905,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO chapter_patterns VALUES (?,?,?,?,?)",
                 (
-                    cp_id, cp["book_name"],
+                    cp_id,
+                    cp["book_name"],
                     json.dumps(cp.get("opening_patterns", []), ensure_ascii=False),
                     json.dumps(cp.get("ending_patterns", []), ensure_ascii=False),
                     json.dumps(cp.get("common_transitions", []), ensure_ascii=False),
@@ -797,8 +920,10 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO emotion_transition_patterns VALUES (?,?,?,?,?)",
                 (
-                    et_id, et["book_name"],
-                    et["transition_type"], et.get("foreshadowing_method", ""),
+                    et_id,
+                    et["book_name"],
+                    et["transition_type"],
+                    et.get("foreshadowing_method", ""),
                     et.get("original_example", ""),
                 ),
             )
@@ -810,8 +935,10 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO information_management VALUES (?,?,?,?,?,?,?)",
                 (
-                    im_id, im["book_name"],
-                    im["strategy_type"], im["target_info"],
+                    im_id,
+                    im["book_name"],
+                    im["strategy_type"],
+                    im["target_info"],
                     im.get("conceal_method", ""),
                     im.get("reveal_timing", ""),
                     im.get("dramatic_purpose", ""),
@@ -825,8 +952,10 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO climax_buildup_chains VALUES (?,?,?,?,?,?)",
                 (
-                    cc_id, cc["book_name"],
-                    cc["climax_name"], cc.get("climax_chapter", ""),
+                    cc_id,
+                    cc["book_name"],
+                    cc["climax_name"],
+                    cc.get("climax_chapter", ""),
                     json.dumps(cc.get("buildup_steps", []), ensure_ascii=False),
                     cc.get("tension_escalation", ""),
                 ),
@@ -839,7 +968,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO conflict_escalation VALUES (?,?,?,?,?)",
                 (
-                    ce_id, ce["book_name"],
+                    ce_id,
+                    ce["book_name"],
                     ce["conflict_line"],
                     json.dumps(ce.get("escalation_steps", []), ensure_ascii=False),
                     ce.get("escalation_pattern", ""),
@@ -853,8 +983,10 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO romance_lines VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
-                    rl_id, rl["book_name"],
-                    rl["couple_a"], rl.get("couple_b", ""),
+                    rl_id,
+                    rl["book_name"],
+                    rl["couple_a"],
+                    rl.get("couple_b", ""),
                     rl.get("line_type", ""),
                     json.dumps(rl.get("development_stages", []), ensure_ascii=False),
                     json.dumps(rl.get("sweet_points", []), ensure_ascii=False),
@@ -871,10 +1003,14 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO mystery_clues VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
-                    mc_id, mc["book_name"],
-                    mc["clue_name"], mc.get("clue_type", ""),
-                    mc.get("planted_chapter", ""), mc.get("payoff_chapter", ""),
-                    mc.get("red_herring", 0), mc.get("misdirection_method", ""),
+                    mc_id,
+                    mc["book_name"],
+                    mc["clue_name"],
+                    mc.get("clue_type", ""),
+                    mc.get("planted_chapter", ""),
+                    mc.get("payoff_chapter", ""),
+                    mc.get("red_herring", 0),
+                    mc.get("misdirection_method", ""),
                     json.dumps(mc.get("reasoning_chain", []), ensure_ascii=False),
                     mc.get("twist_design", ""),
                 ),
@@ -887,7 +1023,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO fear_building VALUES (?,?,?,?,?,?,?)",
                 (
-                    fb_id, fb["book_name"],
+                    fb_id,
+                    fb["book_name"],
                     fb["fear_type"],
                     json.dumps(fb.get("building_steps", []), ensure_ascii=False),
                     json.dumps(fb.get("atmosphere_techniques", []), ensure_ascii=False),
@@ -903,7 +1040,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO progression_systems VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    ps_id, ps["book_name"],
+                    ps_id,
+                    ps["book_name"],
                     ps["system_type"],
                     json.dumps(ps.get("levels", []), ensure_ascii=False),
                     json.dumps(ps.get("upgrade_conditions", []), ensure_ascii=False),
@@ -920,9 +1058,11 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO genre_specific_techniques VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    gt_id, gt["book_name"],
+                    gt_id,
+                    gt["book_name"],
                     gt.get("genre_tag", ""),
-                    gt["technique_name"], gt.get("technique_category", ""),
+                    gt["technique_name"],
+                    gt.get("technique_category", ""),
                     gt.get("analysis", ""),
                     gt.get("original_example", ""),
                     gt.get("applicable_scenarios", ""),
@@ -936,7 +1076,8 @@ class StageH(BaseStage):
             cursor.execute(
                 "INSERT OR REPLACE INTO pov_switching_patterns VALUES (?,?,?,?,?,?,?)",
                 (
-                    pp_id, pp["book_name"],
+                    pp_id,
+                    pp["book_name"],
                     pp["pattern_type"],
                     json.dumps(pp.get("pov_characters", []), ensure_ascii=False),
                     pp.get("switching_triggers", ""),

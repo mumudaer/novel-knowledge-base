@@ -2,6 +2,7 @@
 Ollama API 客户端模块
 封装与本地 Ollama 服务的通信
 """
+
 import json
 import re
 import time
@@ -130,7 +131,7 @@ class OllamaClient:
             # 检查必需模型
             required_models = {
                 "qwen2.5:7b",
-                "qwen3:14b",
+                "qwen14b:latest",
             }
             missing = required_models - installed_models
             if missing:
@@ -209,13 +210,13 @@ class OllamaClient:
             except requests.exceptions.Timeout:
                 logger.warning(f"⚠️ 请求超时 (尝试 {attempt + 1}/{max_retries})")
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 continue
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ 请求失败: {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 continue
 
             except Exception as e:
@@ -273,6 +274,7 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
         # 尝试使用 json_repair 修复
         try:
             import json_repair
+
             return json_repair.repair_json(raw, return_objects=True)
         except Exception:
             pass

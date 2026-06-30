@@ -3,6 +3,12 @@ ChromaDB 向量数据库管理模块
 封装 ChromaDB 的初始化、集合管理、向量操作
 使用 bge-m3 中文优化 embedding 模型替代默认英文模型
 """
+
+import os
+
+# 🌟 核心修复：强制开启离线模式，禁止 ChromaDB 加载模型时偷偷联网
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import chromadb
 import logging
 import threading
@@ -24,18 +30,14 @@ class ChromaManager:
     COLLECTIONS = {
         # Stage B: 写作技法
         "novel_skills": "写作技法向量库",
-
         # Stage C: 感官映射与经典摘录
         "sensory_details": "感官映射向量库",
         "classic_excerpts": "经典文风段落向量库",
-
         # Stage D: 世界观与人物
         "world_settings_kb": "世界观矩阵向量库",
         "character_profiles_kb": "人物静态底色向量库",
-
         # Stage E: 宏观大纲
         "macro_outlines_kb": "宏观卷大纲向量库",
-
         # Stage F: 样本库
         "dialogue_samples_kb": "对话样本向量库",
         "description_samples_kb": "描写样本向量库",
@@ -43,10 +45,8 @@ class ChromaManager:
         "action_scene_samples_kb": "动作场景样本向量库",
         "climax_excerpts_kb": "高潮段落向量库",
         "memorable_quotes_kb": "金句名句向量库",
-
         # Stage G: 人物深度特征
         "character_speech_style_kb": "人物语言风格向量库",
-
         # Stage N: 技法组合
         "technique_combinations_kb": "技法组合模板向量库",
     }
@@ -103,7 +103,9 @@ class ChromaManager:
         embedding_fn = self._get_embedding_function()
 
         if reset:
-            print("WARNING: 正在清空并重建所有 ChromaDB 集合（embedding 模型已更换，旧向量数据不兼容）")
+            print(
+                "WARNING: 正在清空并重建所有 ChromaDB 集合（embedding 模型已更换，旧向量数据不兼容）"
+            )
 
         print("正在初始化 ChromaDB 向量库...")
 
@@ -138,7 +140,9 @@ class ChromaManager:
                         f"集合 [{collection_name}] 已降级为默认 embedding 初始化"
                     )
                 except Exception as fallback_err:
-                    logger.error(f"集合 [{collection_name}] 降级初始化也失败: {fallback_err}")
+                    logger.error(
+                        f"集合 [{collection_name}] 降级初始化也失败: {fallback_err}"
+                    )
 
         print(f"ChromaDB 初始化完毕，共 {len(self.collections)} 个集合。")
 
@@ -215,9 +219,11 @@ class ChromaManager:
                     del model
                 self._embedding_fn = None
                 import gc
+
                 gc.collect()
                 try:
                     import torch
+
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 except ImportError:
