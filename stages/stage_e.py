@@ -196,8 +196,9 @@ class StageE(BaseStage):
                             })
             except Exception as e:
                 logger.warning(f"⚠️ [阶段E] 聚合第 {vol_idx+1} 卷失败: {e}")
+                continue  # 失败时不标记完成，下次运行会重试
 
-            # 标记完成并保存断点
+            # 标记完成并保存断点（仅成功时执行）
             completed_vol_outlines.add(vol_idx)
             self.save_cache({
                 "completed_vol_outlines": list(completed_vol_outlines),
@@ -273,8 +274,9 @@ class StageE(BaseStage):
                                 })
                 except Exception as e:
                     logger.warning(f"⚠️ [阶段E] 章节功能分类批量处理失败 (卷{vol_idx+1}, 批次{batch_start//batch_size+1}): {e}")
+                    continue  # 失败时不标记完成，下次运行会重试
 
-                # 标记完成并保存断点
+                # 标记完成并保存断点（仅成功时执行）
                 completed_vol_functions.add(batch_key)
                 self.save_cache({
                     "completed_vol_outlines": list(completed_vol_outlines),

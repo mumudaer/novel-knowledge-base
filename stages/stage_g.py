@@ -192,8 +192,9 @@ class StageG(BaseStage):
 
             except Exception as e:
                 logger.warning(f"⚠️ [阶段G] 解析人物 {char_name} 失败: {e}")
+                continue  # 失败时不标记完成，下次运行会重试
 
-            # 标记完成并保存断点
+            # 标记完成并保存断点（仅成功时执行）
             completed_chars.add(char_name)
             self.save_cache({"completed_chars": list(completed_chars), "result": result})
 
