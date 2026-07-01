@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 class StageM(BaseStage):
     """Stage M: 常见错误模式提取"""
 
+    # issue_type 归一化映射：将具体问题类型映射到标杆查找维度
+    DIMENSION_NORMALIZE = {
+        "节奏拖沓": "节奏", "对话生硬": "对话", "描写不足": "描写",
+        "人物失真": "人物", "情节漏洞": "情节", "过度告知": "描写",
+        "视角混乱": "情节",
+    }
+
     def __init__(self, book_name: str = "common_mistakes", category: str = "fiction"):
         super().__init__("M", book_name, category)
 
@@ -81,10 +88,10 @@ class StageM(BaseStage):
             if not mistake.get("mistake_name"):
                 continue
 
+            # ID 不含时间戳，保证幂等性
             mistake_id = generate_id(
                 mistake.get("dimension", ""),
                 mistake["mistake_name"],
-                datetime.now().isoformat(),
             )
 
             # 查找标杆范文作为正确示范
@@ -134,13 +141,18 @@ class StageM(BaseStage):
                 
                 for issue in issues:
                     if isinstance(issue, dict):
+                        # stage_j 写入的字段是 issue_type/severity，不是 dimension/type
+                        issue_type = issue.get("issue_type", issue.get("type", ""))
+                        # 归一化映射：将 issue_type（如“节奏拖沓”）归一化为标杆查找维度（如“节奏”）
+                        raw_dimension = issue.get("dimension", issue_type or "未知")
+                        normalized_dim = self.DIMENSION_NORMALIZE.get(issue_type, raw_dimension)
                         issues_data.append({
                             "project_name": project_name,
                             "chapter_index": chapter_index,
                             "overall_score": overall_score,
-                            "dimension": issue.get("dimension", "未知"),
-                            "issue_type": issue.get("type", ""),
-                            "description": issue.get("description", ""),
+                            "dimension": normalized_dim,
+                            "issue_type": issue_type,
+                            "description": issue.get("description", issue.get("location", "")),
                             "severity": issue.get("severity", "medium"),
                             "location": issue.get("location", ""),
                         })

@@ -64,15 +64,45 @@ class StageH(BaseStage):
             logger.warning("⚠️ [阶段H] 没有 Stage A 数据，跳过全书宏观分析。")
             return result
 
-        # 构建全书摘要文本
-        summaries_text = "\n".join(
-            [
-                f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
-                for ch in stage_a_res
-            ]
-        )
-        if len(summaries_text) > 8000:
-            summaries_text = summaries_text[:8000] + "\n...(截断)"
+        # 构建全书摘要文本（超过阈值时均匀采样，确保开头/中间/结尾都有覆盖）
+        max_summary_chars = 8000
+        summary_lines = [
+            f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
+            for ch in stage_a_res
+        ]
+        summaries_text = "\n".join(summary_lines)
+
+        if len(summaries_text) > max_summary_chars:
+            # 均匀采样：前 25% + 中 50% + 后 25% 的容量
+            total = len(summary_lines)
+            # 估算每行平均长度
+            avg_line_len = len(summaries_text) / max(total, 1)
+            max_lines = max(int(max_summary_chars / avg_line_len), 20)
+
+            # 采样策略：前 1/4、中间 1/2、后 1/4
+            head_count = max_lines // 4
+            tail_count = max_lines // 4
+            mid_count = max_lines - head_count - tail_count
+
+            head_indices = list(range(min(head_count, total)))
+            tail_start = max(total - tail_count, head_count)
+            tail_indices = list(range(tail_start, total))
+
+            # 中间部分均匀采样
+            mid_range = list(range(head_count, tail_start))
+            if len(mid_range) > mid_count and mid_count > 0:
+                step = len(mid_range) / mid_count
+                mid_indices = [mid_range[int(i * step)] for i in range(mid_count)]
+            else:
+                mid_indices = mid_range
+
+            sampled_indices = sorted(set(head_indices + mid_indices + tail_indices))
+            sampled_lines = [summary_lines[i] for i in sampled_indices]
+            summaries_text = "\n".join(sampled_lines)
+            logger.info(
+                f"[阶段H] 全书摘要超过 {max_summary_chars} 字符，"
+                f"从 {total} 章中均匀采样 {len(sampled_indices)} 章"
+            )
 
         # 构建卷大纲文本
         volumes_text = ""

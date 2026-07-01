@@ -133,6 +133,10 @@ class DatabaseManager:
         # 技法组合模板（Stage N）
         "technique_combinations": "(id TEXT PRIMARY KEY, scene_type TEXT, combo_name TEXT, technique_sequence_json TEXT, technique_roles_json TEXT, applicable_scenarios TEXT, variations TEXT, benchmark_book TEXT, original_example TEXT, created_at TEXT)",
         
+        # Stage O: 事件因果图谱
+        "story_events": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, event_name TEXT, event_summary TEXT, event_type TEXT, characters_involved TEXT, significance TEXT)",
+        "event_causal_edges": "(id TEXT PRIMARY KEY, book_name TEXT, source_event_id TEXT, target_event_id TEXT, relation_type TEXT, relation_detail TEXT)",
+        
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",
     }
@@ -142,25 +146,29 @@ class DatabaseManager:
     def __init__(self, db_path: Optional[str] = None):
         """初始化数据库连接"""
         self.db_path = db_path or SQLITE_PATH
-        self.conn: Optional[sqlite3.Connection] = None
+        # 使用线程本地存储，每个线程独立的 SQLite 连接，避免多线程并发写入冲突
+        self._local = threading.local()
 
     def connect(self) -> sqlite3.Connection:
-        """建立数据库连接"""
-        if self.conn is None:
-            self.conn = sqlite3.connect(
+        """获取当前线程的数据库连接（线程本地）"""
+        conn = getattr(self._local, 'conn', None)
+        if conn is None:
+            conn = sqlite3.connect(
                 self.db_path,
                 timeout=30.0,
                 check_same_thread=False,
             )
-            self.conn.execute("PRAGMA journal_mode=WAL;")
-            self.conn.execute("PRAGMA synchronous=NORMAL;")
-        return self.conn
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+            self._local.conn = conn
+        return conn
 
     def close(self):
-        """关闭数据库连接"""
-        if self.conn:
-            self.conn.close()
-            self.conn = None
+        """关闭当前线程的数据库连接"""
+        conn = getattr(self._local, 'conn', None)
+        if conn:
+            conn.close()
+            self._local.conn = None
 
     def init_tables(self):
         """初始化所有表结构"""
@@ -209,9 +217,21 @@ class DatabaseManager:
         conn.executemany(query, params_list)
 
     def commit(self):
-        """提交事务"""
-        if self.conn:
-            self.conn.commit()
+        """提交当前线程的事务（带单次重试 + 异常日志）"""
+        conn = getattr(self._local, 'conn', None)
+        if conn:
+            try:
+                conn.commit()
+            except Exception as e:
+                logger.error(f"SQLite commit 失败: {e}")
+                # 单次重试（等待可能的并发写入结束）
+                import time
+                time.sleep(0.5)
+                try:
+                    conn.commit()
+                except Exception as e2:
+                    logger.error(f"SQLite commit 重试失败: {e2}")
+                    raise
 
     def get_existing_ids(self, table: str, book_name: str, id_column: str = "chapter_id") -> set:
         """获取已存在的 ID 集合"""

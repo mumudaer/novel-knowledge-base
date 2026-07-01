@@ -33,21 +33,32 @@ class StageG(BaseStage):
         """
         logger.info(f"=== 阶段七：人物深度特征提取 ({self.book_name}) ===")
 
-        result = {
-            "character_speech_style": [],
-            "character_behavior_marks": [],
-            "character_relationship_dynamics": [],
-        }
+        DATA_KEYS = ["character_speech_style", "character_behavior_marks", "character_relationship_dynamics"]
+        result = {key: [] for key in DATA_KEYS}
 
-        # 收集所有出现过的人物名及其出现频率
+        # 断点恢复
+        cache = self.load_cache()
+        completed_chars = set()
+        if cache and "result" in cache:
+            cached_result = cache["result"]
+            for key in DATA_KEYS:
+                result[key] = cached_result.get(key, [])
+            completed_chars = set(cache.get("completed_chars", []))
+            if completed_chars:
+                logger.info(f"✅ [阶段G] 恢复断点：已完成 {len(completed_chars)} 个人物")
+
+        # 一次遍历构建人物频率 + 人物→章节索引（避免 O(人物×章节) 嵌套循环）
         character_frequency = {}
+        character_chapters_index = {}  # char_name -> [chap, ...]
         for chap in chapters:
             char_state = chap.get("character_state", {})
             for char_name in char_state.keys():
-                if char_name not in ["_raw", "旁白"]:
-                    character_frequency[char_name] = (
-                        character_frequency.get(char_name, 0) + 1
-                    )
+                if char_name in ("_raw", "旁白"):
+                    continue
+                character_frequency[char_name] = character_frequency.get(char_name, 0) + 1
+                if char_name not in character_chapters_index:
+                    character_chapters_index[char_name] = []
+                character_chapters_index[char_name].append(chap)
 
         logger.info(
             f"📊 [阶段G] 发现 {len(character_frequency)} 个人物，将提取深度特征"
@@ -60,12 +71,12 @@ class StageG(BaseStage):
         target_characters = [char_name for char_name, freq in sorted_characters[:20]]
 
         for char_name in tqdm(target_characters, desc="提取人物深度特征"):
-            # 收集该人物出现的章节
-            char_chapters = []
-            for chap in chapters:
-                char_state = chap.get("character_state", {})
-                if char_name in char_state:
-                    char_chapters.append(chap)
+            # 断点跳过已完成人物
+            if char_name in completed_chars:
+                continue
+
+            # 直接从索引获取该人物出现的章节
+            char_chapters = character_chapters_index.get(char_name, [])
 
             if len(char_chapters) < 3:
                 continue  # 出现次数太少，跳过
@@ -182,6 +193,10 @@ class StageG(BaseStage):
             except Exception as e:
                 logger.warning(f"⚠️ [阶段G] 解析人物 {char_name} 失败: {e}")
 
+            # 标记完成并保存断点
+            completed_chars.add(char_name)
+            self.save_cache({"completed_chars": list(completed_chars), "result": result})
+
         logger.info(
             f"✅ [阶段G战报] 语言风格: {len(result['character_speech_style'])} 人, "
             f"行为标志: {len(result['character_behavior_marks'])} 人, "
@@ -204,8 +219,8 @@ class StageG(BaseStage):
                 if not char_a or not char_b:
                     continue
 
-                node_a = f"char:{self.book_name}:{char_a}"
-                node_b = f"char:{self.book_name}:{char_b}"
+                node_a = f"char:{char_a}"
+                node_b = f"char:{char_b}"
 
                 # 从 timeline 中提取最新关系状态
                 timeline = rd.get("timeline", [])

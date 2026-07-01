@@ -59,6 +59,22 @@ class StageE(BaseStage):
             logger.warning("⚠️ [阶段E] 没有 Stage A 数据，跳过宏观聚合。")
             return result
 
+        # 断点恢复
+        cache = self.load_cache()
+        completed_vol_outlines = set()
+        completed_vol_functions = set()
+        if cache and "result" in cache:
+            cached_result = cache["result"]
+            result["macro_outlines"] = cached_result.get("macro_outlines", [])
+            result["plot_foreshadowing"] = cached_result.get("plot_foreshadowing", [])
+            result["entity_state_tracker"] = cached_result.get("entity_state_tracker", [])
+            result["chapter_functions"] = cached_result.get("chapter_functions", [])
+            result["setting_evolutions"] = cached_result.get("setting_evolutions", [])
+            completed_vol_outlines = set(cache.get("completed_vol_outlines", []))
+            completed_vol_functions = set(cache.get("completed_vol_functions", []))
+            if completed_vol_outlines:
+                logger.info(f"✅ [阶段E] 恢复断点：卷大纲已完成 {len(completed_vol_outlines)} 卷，章节功能已完成 {len(completed_vol_functions)} 批次")
+
         # 卷大纲聚合
         volumes = [
             stage_a_res[i : i + chapters_per_volume]
@@ -67,6 +83,10 @@ class StageE(BaseStage):
         logger.info(f"📚 [阶段E] 共 {len(stage_a_res)} 章，将聚合为 {len(volumes)} 个宏观卷大纲。")
 
         for vol_idx, vol_chapters in enumerate(tqdm(volumes, desc="聚合卷大纲")):
+            # 断点跳过已完成卷
+            if vol_idx in completed_vol_outlines:
+                continue
+
             start_chap = vol_idx * chapters_per_volume + 1
             end_chap = (vol_idx + 1) * chapters_per_volume
 
@@ -74,8 +94,8 @@ class StageE(BaseStage):
                 f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
                 for ch in vol_chapters
             ])
-            if len(summaries_text) > 4000:
-                summaries_text = summaries_text[:4000] + "\n...(截断)"
+            if len(summaries_text) > 6000:
+                summaries_text = summaries_text[:6000] + "\n...(截断)"
 
             # 卷大纲 Prompt
             prompt_e = f"""你是资深文学主编。根据《{self.book_name}》({self.category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲，并盘点本卷【全阵营人物状态变更】与【伏笔/意象悬念】。
@@ -177,6 +197,14 @@ class StageE(BaseStage):
             except Exception as e:
                 logger.warning(f"⚠️ [阶段E] 聚合第 {vol_idx+1} 卷失败: {e}")
 
+            # 标记完成并保存断点
+            completed_vol_outlines.add(vol_idx)
+            self.save_cache({
+                "completed_vol_outlines": list(completed_vol_outlines),
+                "completed_vol_functions": list(completed_vol_functions),
+                "result": result,
+            })
+
         # 章节功能分类（按卷批量处理，减少 LLM 调用次数）
         logger.info(f"📋 [阶段E] 开始章节功能分类分析（按卷批量处理）...")
         
@@ -186,6 +214,11 @@ class StageE(BaseStage):
             # 每卷内再分批，每批最多 10 章
             batch_size = 10
             for batch_start in range(0, len(vol_chapters), batch_size):
+                # 断点跳过已完成批次
+                batch_key = f"{vol_idx}_{batch_start}"
+                if batch_key in completed_vol_functions:
+                    continue
+
                 batch_chapters = vol_chapters[batch_start:batch_start + batch_size]
                 
                 # 构建批量章节文本
@@ -240,6 +273,14 @@ class StageE(BaseStage):
                                 })
                 except Exception as e:
                     logger.warning(f"⚠️ [阶段E] 章节功能分类批量处理失败 (卷{vol_idx+1}, 批次{batch_start//batch_size+1}): {e}")
+
+                # 标记完成并保存断点
+                completed_vol_functions.add(batch_key)
+                self.save_cache({
+                    "completed_vol_outlines": list(completed_vol_outlines),
+                    "completed_vol_functions": list(completed_vol_functions),
+                    "result": result,
+                })
 
         logger.info(
             f"✅ [阶段E战报] 卷大纲: {len(result['macro_outlines'])} 卷 | "

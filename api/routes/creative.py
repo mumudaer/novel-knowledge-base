@@ -59,97 +59,6 @@ class ContextPushRequest(BaseModel):
     project_name: str = Field(default="default", description="项目标识")
 
 
-# ===================== 混合检索工具函数 =====================
-
-def hybrid_search(
-    table: str,
-    collection: str,
-    columns: List[str],
-    query: Optional[str] = None,
-    filters: Dict[str, Any] = None,
-    limit: int = 10,
-) -> List[Dict[str, Any]]:
-    """
-    混合检索：向量召回 + SQL 过滤 + 去重合并
-
-    1. 如果有 query：先 ChromaDB 向量召回 Top-K
-    2. 如果有过滤条件：SQL 精确过滤补充
-    3. 按 id 去重，向量结果优先
-    4. 返回统一的 results 列表
-
-    Args:
-        table: SQLite 表名
-        collection: ChromaDB 集合名
-        columns: 列名列表
-        query: 语义搜索关键词
-        filters: SQL 过滤条件字典 {字段名: 值}
-        limit: 返回数量上限
-
-    Returns:
-        去重合并后的结果列表
-    """
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    seen_ids = set()
-    results = []
-
-    # 1. 向量召回（优先）
-    if query:
-        try:
-            chroma = get_chroma_manager()
-            where_filter = None
-            if filters and "book_name" in filters:
-                where_filter = {"book_name": filters["book_name"]}
-            
-            chroma_res = chroma.query(
-                collection,
-                query_texts=[query],
-                n_results=limit,
-                where=where_filter,
-            )
-            
-            if chroma_res and chroma_res.get("ids"):
-                for i, doc_id in enumerate(chroma_res["ids"][0]):
-                    if doc_id not in seen_ids:
-                        seen_ids.add(doc_id)
-                        result_item = {
-                            "id": doc_id,
-                            "source": "semantic",
-                            "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                            "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                        }
-                        results.append(result_item)
-        except Exception:
-            pass
-
-    # 2. SQL 过滤补充
-    sql_query = f"SELECT * FROM {table} WHERE 1=1"
-    params = []
-    
-    if filters:
-        for field, value in filters.items():
-            if value:
-                if field == "book_name":
-                    sql_query += f" AND {field} = ?"
-                else:
-                    sql_query += f" AND {field} LIKE ?"
-                    value = f"%{value}%"
-                params.append(value)
-    
-    sql_query += f" LIMIT {limit}"
-    cursor.execute(sql_query, params)
-    rows = cursor.fetchall()
-    
-    for row in rows:
-        row_dict = dict(zip(columns, row))
-        row_id = row_dict.get("id", "")
-        if row_id and row_id not in seen_ids:
-            seen_ids.add(row_id)
-            row_dict["source"] = "structured"
-            results.append(row_dict)
-
-    return results[:limit]
-
 
 # ===================== 世界观搜索 =====================
 
@@ -2485,3 +2394,203 @@ def query_benchmarks(
             pass
 
     return {"success": True, "data": {"dimension": dimension, "total_results": len(results), "results": results[:limit]}}
+
+
+# ===================== 事件因果图谱接口 =====================
+
+
+@router.get("/events/{book_name}")
+def query_story_events(
+    book_name: str,
+    chapter_range: Optional[str] = Query(None, description="章节范围过滤（如：1-100）"),
+    event_type: Optional[str] = Query(None, description="事件类型过滤（如：伏笔埋设/冲突爆发/高潮）"),
+    significance: Optional[str] = Query(None, description="重要性过滤（high/medium/low）"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """
+    查询关键事件列表
+
+    返回指定书籍的所有关键事件，支持按章节范围、事件类型、重要性过滤。
+    """
+    db = get_db_manager()
+    cursor = db.connect().cursor()
+
+    sql = "SELECT * FROM story_events WHERE book_name = ?"
+    params: list = [book_name]
+
+    if event_type:
+        sql += " AND event_type = ?"
+        params.append(event_type)
+    if significance:
+        sql += " AND significance = ?"
+        params.append(significance)
+
+    # 不使用 SQL LIMIT，在 Python 侧过滤后再截断（解决 chapter_range 过滤顺序问题）
+    sql += " ORDER BY chapter_id"
+
+    columns = ["id", "book_name", "chapter_id", "event_name", "event_summary", "event_type", "characters_involved", "significance"]
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        events = [dict(zip(columns, row)) for row in rows]
+
+        # 解析 characters_involved JSON
+        for event in events:
+            try:
+                event["characters_involved"] = json.loads(event["characters_involved"])
+            except (json.JSONDecodeError, TypeError):
+                event["characters_involved"] = []
+
+        # 按章节范围过滤
+        if chapter_range and "-" in chapter_range:
+            try:
+                start, end = chapter_range.split("-")
+                start, end = int(start), int(end)
+                import re
+                filtered = []
+                for event in events:
+                    match = re.search(r"(\d+)", event.get("chapter_id", ""))
+                    if match:
+                        chap_num = int(match.group(1))
+                        if start <= chap_num <= end:
+                            filtered.append(event)
+                events = filtered
+            except ValueError:
+                pass
+
+        # 按章节编号数值排序（解决字符串排序 "第10章" < "第2章" 的问题）
+        import re as _re
+        def _chapter_num(e):
+            m = _re.search(r"(\d+)", e.get("chapter_id", ""))
+            return int(m.group(1)) if m else 99999
+        events.sort(key=_chapter_num)
+
+        # 过滤后再截断
+        events = events[:limit]
+
+        return {"success": True, "data": {"book_name": book_name, "total": len(events), "events": events}}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/causal-chain/{book_name}")
+def query_causal_chain(
+    book_name: str,
+    event_name: Optional[str] = Query(None, description="起始事件名称（精确匹配）"),
+    depth: int = Query(3, ge=1, le=10, description="遍历深度"),
+    direction: Optional[str] = Query("downstream", description="方向：downstream/upstream/both"),
+):
+    """
+    查询事件因果链
+
+    从指定事件出发，沿因果关系图遍历，返回因果链。
+    """
+    db = get_db_manager()
+    cursor = db.connect().cursor()
+
+    # 加载该书所有事件
+    cursor.execute("SELECT * FROM story_events WHERE book_name = ?", (book_name,))
+    event_columns = ["id", "book_name", "chapter_id", "event_name", "event_summary", "event_type", "characters_involved", "significance"]
+    all_events = {}
+    for row in cursor.fetchall():
+        event = dict(zip(event_columns, row))
+        all_events[event["id"]] = event
+
+    # 加载该书所有因果边
+    cursor.execute("SELECT * FROM event_causal_edges WHERE book_name = ?", (book_name,))
+    edge_columns = ["id", "book_name", "source_event_id", "target_event_id", "relation_type", "relation_detail"]
+    edges = [dict(zip(edge_columns, row)) for row in cursor.fetchall()]
+
+    # 构建邻接表
+    downstream = {}  # event_id -> [(target_id, relation_type, detail)]
+    upstream = {}    # event_id -> [(source_id, relation_type, detail)]
+    for edge in edges:
+        src = edge["source_event_id"]
+        tgt = edge["target_event_id"]
+        downstream.setdefault(src, []).append((tgt, edge["relation_type"], edge["relation_detail"]))
+        upstream.setdefault(tgt, []).append((src, edge["relation_type"], edge["relation_detail"]))
+
+    # 找到起始事件
+    start_event_id = None
+    if event_name:
+        for eid, event in all_events.items():
+            if event["event_name"] == event_name:
+                start_event_id = eid
+                break
+        if not start_event_id:
+            return {"success": False, "error": f"未找到事件: {event_name}"}
+    else:
+        # 没有指定起始事件，返回所有高重要性事件的因果链概览
+        high_events = [e for e in all_events.values() if e.get("significance") == "high"]
+        return {
+            "success": True,
+            "data": {
+                "book_name": book_name,
+                "total_events": len(all_events),
+                "total_edges": len(edges),
+                "high_significance_events": [
+                    {"event_name": e["event_name"], "chapter_id": e["chapter_id"], "event_type": e["event_type"]}
+                    for e in high_events[:50]
+                ],
+            },
+        }
+
+    # BFS 遍历因果链
+    visited = set()
+    chain = []
+
+    def traverse(event_id: str, current_depth: int, direction_label: str):
+        if current_depth > depth or event_id in visited:
+            return
+        visited.add(event_id)
+
+        event = all_events.get(event_id, {})
+        chain.append({
+            "depth": current_depth,
+            "direction": direction_label,
+            "event_name": event.get("event_name", ""),
+            "event_summary": event.get("event_summary", ""),
+            "chapter_id": event.get("chapter_id", ""),
+            "event_type": event.get("event_type", ""),
+        })
+
+        if direction in ("downstream", "both"):
+            for tgt_id, rel_type, rel_detail in downstream.get(event_id, []):
+                tgt_event = all_events.get(tgt_id, {})
+                chain.append({
+                    "depth": current_depth + 1,
+                    "direction": "downstream",
+                    "relation_type": rel_type,
+                    "relation_detail": rel_detail,
+                    "target_event_name": tgt_event.get("event_name", ""),
+                    "target_chapter_id": tgt_event.get("chapter_id", ""),
+                })
+                traverse(tgt_id, current_depth + 1, "downstream")
+
+        if direction in ("upstream", "both"):
+            for src_id, rel_type, rel_detail in upstream.get(event_id, []):
+                src_event = all_events.get(src_id, {})
+                chain.append({
+                    "depth": current_depth + 1,
+                    "direction": "upstream",
+                    "relation_type": rel_type,
+                    "relation_detail": rel_detail,
+                    "target_event_name": src_event.get("event_name", ""),
+                    "target_chapter_id": src_event.get("chapter_id", ""),
+                })
+                traverse(src_id, current_depth + 1, "upstream")
+
+    traverse(start_event_id, 0, "start")
+
+    return {
+        "success": True,
+        "data": {
+            "book_name": book_name,
+            "start_event": all_events.get(start_event_id, {}).get("event_name", ""),
+            "direction": direction,
+            "depth": depth,
+            "chain_length": len(chain),
+            "chain": chain,
+        },
+    }

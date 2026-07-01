@@ -3,6 +3,7 @@ Stage C: 文风指纹与感官映射提取
 使用 qwen2.5:7b 模型，多线程提取文风指纹、感官映射、经典摘录
 """
 import logging
+import re
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
@@ -115,13 +116,13 @@ class StageC(BaseStage):
 
         blacklist = {"无", "未知", "暂无", "没有", "null", "none", "未提供"}
 
+        def clean_list(fp, key):
+            val = fp.get(key, [])
+            return ",".join([w for w in val if w and w not in blacklist])
+
         for res in results:
             fp = res.get("author_fingerprint", {})
             fp_id = generate_id(res["book_name"], res["chapter_id"], "fingerprint")
-
-            def clean_list(key):
-                val = fp.get(key, [])
-                return ",".join([w for w in val if w and w not in blacklist])
 
             cursor.execute(
                 "INSERT OR REPLACE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -129,10 +130,10 @@ class StageC(BaseStage):
                     fp_id,
                     res["book_name"],
                     res["category"],
-                    clean_list("preferred_verbs"),
-                    clean_list("preferred_adjectives"),
-                    clean_list("environmental_imagery"),
-                    clean_list("signature_transitions"),
+                    clean_list(fp, "preferred_verbs"),
+                    clean_list(fp, "preferred_adjectives"),
+                    clean_list(fp, "environmental_imagery"),
+                    clean_list(fp, "signature_transitions"),
                     fp.get("negative_prompts", ""),
                     fp.get("narrative_perspective", ""),
                     fp.get("sentence_rhythm", ""),
@@ -173,11 +174,20 @@ class StageC(BaseStage):
             self.chroma.upsert_batch("sensory_details", sen_ids, sen_docs, sen_metas)
             stats["sensory_chroma"] = len(sen_ids)
 
-        # ChromaDB: 经典摘录
+        # ChromaDB: 经典摘录（含乱码拦截）
         exc_ids, exc_docs, exc_metas = [], [], []
+        # GBK 误读为 UTF-8 的典型乱码特征
+        _garbled_re = re.compile(r"(?:[\x80-\xff]{3,}|[\xc0-\xff]{2,})")
         for res in results:
             for exc in res.get("classic_excerpts", []):
-                if not exc.get("excerpt_text"):
+                excerpt_text = exc.get("excerpt_text", "")
+                if not excerpt_text:
+                    continue
+                # 乱码拦截：跳过包含典型乱码特征的摘录
+                if _garbled_re.search(excerpt_text):
+                    logger.warning(
+                        f"跳过乱码摘录: chapter={res.get('chapter_id', '未知')}, text={excerpt_text[:50]}..."
+                    )
                     continue
                 eid = generate_id(res["book_name"], res["chapter_id"], exc.get("style_tag", ""))
                 exc_ids.append(eid)

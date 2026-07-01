@@ -56,9 +56,9 @@ logger = logging.getLogger(__name__)
 # ===================== Layer 定义 =====================
 
 LAYER_STAGES = {
-    1: ["A"],  # 基础层：必须最先完成
-    2: ["B", "C", "D", "I"],  # 分析层：依赖 Layer 1，彼此独立
-    3: ["E", "F", "G", "H"],  # 综合层：依赖 Layer 1+2，彼此可并行
+    1: ["A"],
+    2: ["B", "C", "D", "I"],
+    3: ["E", "F", "G", "H", "O"],  # Stage O: 事件因果图谱
 }
 
 # manifest 字典多线程写入保护锁
@@ -109,12 +109,30 @@ def mark_stage_failed(manifest: Dict, book_name: str, stage: str, error: str):
         save_manifest(manifest)
 
 
+def mark_stage_skipped(manifest: Dict, book_name: str, stage: str, reason: str):
+    """
+    标记某个 Stage 被跳过（前置依赖未完成）。
+    下次运行时 is_stage_complete 返回 False，会自动重试。
+    """
+    with _manifest_lock:
+        if "book_progress" not in manifest:
+            manifest["book_progress"] = {}
+        if book_name not in manifest["book_progress"]:
+            manifest["book_progress"][book_name] = {"stage_status": {}}
+        if "stage_status" not in manifest["book_progress"][book_name]:
+            manifest["book_progress"][book_name]["stage_status"] = {}
+        manifest["book_progress"][book_name]["stage_status"][
+            stage
+        ] = f"skipped:{reason}"
+        save_manifest(manifest)
+
+
 def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
     """打印所有书籍的处理状态矩阵"""
     print("\n" + "=" * 70)
     print("处理状态矩阵 (L1=基础层  L2=分析层  L3=综合层)")
     print("=" * 70)
-    header = f"{'书名':<20} | {'A':^3} | {'B':^3} {'C':^3} {'D':^3} {'I':^3} | {'E':^3} {'F':^3} {'G':^3} {'H':^3} | 状态"
+    header = f"{'书名':<20} | {'A':^3} | {'B':^3} {'C':^3} {'D':^3} {'I':^3} | {'E':^3} {'F':^3} {'G':^3} {'H':^3} {'O':^3} | 状态"
     print(header)
     print("-" * 70)
 
@@ -132,31 +150,38 @@ def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
                 return "OK"
             elif st.startswith("failed"):
                 return "XX"
+            elif st.startswith("skipped"):
+                return "SK"
             else:
                 return "--"
 
-        icons = [status_icon(s) for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]]
+        icons = [status_icon(s) for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]]
 
         # 判断整体状态
         if all(
             stage_status.get(s) == "complete"
-            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]
         ):
             overall = "DONE"
         elif any(
             stage_status.get(s, "").startswith("failed")
-            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]
         ):
             overall = "ERR"
         elif any(
+            stage_status.get(s, "").startswith("skipped")
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]
+        ):
+            overall = "SKIP"
+        elif any(
             stage_status.get(s) == "complete"
-            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H"]
+            for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]
         ):
             overall = "WIP"
         else:
             overall = "NEW"
 
-        line = f"{display_name:<20} | {icons[0]:^3} | {icons[1]:^3} {icons[2]:^3} {icons[3]:^3} {icons[4]:^3} | {icons[5]:^3} {icons[6]:^3} {icons[7]:^3} {icons[8]:^3} | {overall}"
+        line = f"{display_name:<20} | {icons[0]:^3} | {icons[1]:^3} {icons[2]:^3} {icons[3]:^3} {icons[4]:^3} | {icons[5]:^3} {icons[6]:^3} {icons[7]:^3} {icons[8]:^3} {icons[9]:^3} | {overall}"
         print(line)
 
     print("=" * 70 + "\n")
@@ -310,11 +335,8 @@ def run_layer_2(
 
     def run_stage(stage_key, stage_obj, input_data):
         """在线程中运行单个 Stage"""
-        if input_data == "stage_i_raw":
-            # Stage I 需要原始章节文本，从 stage_a_res 中取（它有 text 字段）
-            return stage_key, stage_obj.run(stage_a_res)
-        else:
-            return stage_key, stage_obj.run(stage_a_res)
+        # Stage I 和 B/C/D 都使用 stage_a_res（它包含 text 字段）
+        return stage_key, stage_obj.run(stage_a_res)
 
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         futures = {}
@@ -340,13 +362,15 @@ def run_layer_2(
 
 def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest: Dict):
     """
-    Layer 3 (综合层): Stage E/F/G/H — 完全并行
-    依赖 Layer 1 的摘要数据和 Layer 2 的部分结果（但代码审查确认 E/F/G/H 之间无直接依赖）
+    Layer 3 (综合层): Stage E/F/G/H/O — 完全并行
+    依赖 Layer 1 的摘要数据和 Layer 2 的部分结果
+    Stage H 需要 Stage E 的结果，Stage O 仅需 Stage A 的摘要
     """
     from stages.stage_e import StageE
     from stages.stage_f import StageF
     from stages.stage_g import StageG
     from stages.stage_h import StageH
+    from stages.stage_o import StageO
 
     tasks = {}
 
@@ -358,6 +382,8 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
         tasks["G"] = StageG(book_name, category)
     if not is_stage_complete(manifest, book_name, "H"):
         tasks["H"] = StageH(book_name, category)
+    if not is_stage_complete(manifest, book_name, "O"):
+        tasks["O"] = StageO(book_name, category)
 
     if not tasks:
         print(f"  [Layer 3] 所有 Stage 已完成，跳过")
@@ -438,18 +464,26 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
                 logger.error(f"Stage {key} 执行失败: {e}")
                 mark_stage_failed(manifest, book_name, key, str(e))
 
-        # E/F/G 全部完成后，运行 Stage H（带 E 的结果）
+        # E/F/G/O 全部完成后，运行 Stage H（带 E 的结果）
         if h_stage_obj is not None:
-            e_res_for_h = stage_e_result_local or stage_e_res or {}
-            try:
-                h_key, h_obj, h_result = run_stage_h(h_stage_obj, e_res_for_h)
-                stats = h_obj.insert(h_result)
-                logger.info(f"Stage H 入库完成: {stats}")
-                h_obj.run_quality_check(h_result)
-                mark_stage_complete(manifest, book_name, "H")
-            except Exception as e:
-                logger.error(f"Stage H 执行失败: {e}")
-                mark_stage_failed(manifest, book_name, "H", str(e))
+            # 检查 Stage E 是否已完成（E 失败或未运行时跳过 H）
+            e_complete = is_stage_complete(manifest, book_name, "E")
+            if not e_complete:
+                logger.warning(
+                    "Stage E 未完成，跳过 Stage H（下次运行时自动重试）"
+                )
+                mark_stage_skipped(manifest, book_name, "H", "dependency_E_not_complete")
+            else:
+                e_res_for_h = stage_e_result_local or stage_e_res or {}
+                try:
+                    h_key, h_obj, h_result = run_stage_h(h_stage_obj, e_res_for_h)
+                    stats = h_obj.insert(h_result)
+                    logger.info(f"Stage H 入库完成: {stats}")
+                    h_obj.run_quality_check(h_result)
+                    mark_stage_complete(manifest, book_name, "H")
+                except Exception as e:
+                    logger.error(f"Stage H 执行失败: {e}")
+                    mark_stage_failed(manifest, book_name, "H", str(e))
 
 
 # ===================== 后处理 =====================
@@ -533,7 +567,7 @@ def finalize_book(book_name: str, manifest: Dict):
     save_manifest(manifest)
 
     # 清理临时状态文件
-    for stage in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
+    for stage in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "O"]:
         f = get_state_file(book_name, stage)
         if os.path.exists(f):
             try:
@@ -568,10 +602,27 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
     text_path = merge_txt_files(book_info["all_files"], merge_path)
 
     try:
-        # 读取并切分章节
-        with open(text_path, "r", encoding="utf-8") as f:
-            raw_text = f.read()
+        # 读取文本（编码自适应链：utf-8 → gbk → utf-16 → latin-1）
+        raw_text = ""
+        for encoding in ("utf-8", "gbk", "utf-16"):
+            try:
+                with open(text_path, "r", encoding=encoding) as f:
+                    raw_text = f.read()
+                break
+            except UnicodeDecodeError:
+                continue
+        if not raw_text:
+            # 最后手段：latin-1 不会抛异常但可能产生乱码
+            with open(text_path, "rb") as f:
+                raw_text = f.read().decode("latin-1", errors="ignore")
+            logger.warning(f"\u300a{book_name}\u300b 所有常见编码均失败，使用 latin-1 降级读取（可能有乱码）")
+
+        # 清洗并切分章节
         raw_text = clean_novel_text(raw_text)
+
+        if len(raw_text) < 500:
+            logger.warning(f"\u300a{book_name}\u300b 清洗后正文不足500字，可能是防盗章节或空文件")
+
         chapters = smart_split_chapters(raw_text, book_name)
         total_chapters = len(chapters)
         total_words = len(raw_text)

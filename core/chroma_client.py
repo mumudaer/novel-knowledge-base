@@ -49,6 +49,10 @@ class ChromaManager:
         "character_speech_style_kb": "人物语言风格向量库",
         # Stage N: 技法组合
         "technique_combinations_kb": "技法组合模板向量库",
+
+        # Stage O: 事件因果图谱
+        "story_events_kb": "关键事件向量库",
+        "event_causal_edges_kb": "事件因果关系向量库",
     }
 
     def __init__(self, chroma_path: Optional[str] = None):
@@ -213,11 +217,10 @@ class ChromaManager:
         """
         if self._embedding_fn is not None:
             try:
-                # 尝试清理 sentence-transformers 模型的 GPU 缓存
-                model = getattr(self._embedding_fn, "_model", None)
-                if model is not None:
-                    del model
-                self._embedding_fn = None
+                # 先删除引用，再 gc，确保所有内部引用都被清理
+                embedding_fn = self._embedding_fn
+                self._embedding_fn = None  # 先置空，断开引用
+                del embedding_fn
                 import gc
 
                 gc.collect()

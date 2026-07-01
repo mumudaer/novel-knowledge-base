@@ -4,6 +4,7 @@
 输出结构化的"场景标签"，并映射到知识库查询策略
 """
 import logging
+import threading
 from typing import Dict, Any, List, Optional
 from core.ollama_client import ollama_chat, safe_parse_json
 
@@ -192,11 +193,14 @@ class ContextAnalyzer:
 
 # 全局上下文分析器实例
 _global_context_analyzer: Optional[ContextAnalyzer] = None
+_context_analyzer_lock = threading.Lock()
 
 
 def get_context_analyzer() -> ContextAnalyzer:
-    """获取全局上下文分析器实例"""
+    """获取全局上下文分析器实例（线程安全）"""
     global _global_context_analyzer
     if _global_context_analyzer is None:
-        _global_context_analyzer = ContextAnalyzer()
+        with _context_analyzer_lock:
+            if _global_context_analyzer is None:
+                _global_context_analyzer = ContextAnalyzer()
     return _global_context_analyzer

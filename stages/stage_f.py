@@ -6,12 +6,14 @@ Stage F: 对话/描写/动作专项样本库
 import json
 import logging
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
 from core.stage_result import StageResult
 from core.chroma_utils import bulk_upsert_to_chroma
+from config.settings import STAGE_F_WORKERS
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ class StageF(BaseStage):
     def __init__(self, book_name: str, category: str):
         super().__init__("F", book_name, category)
 
-    def _extract_basic_samples(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
+    def _extract_basic_samples(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """批次1：提取基础样本（对话+描写+转场）"""
         result = {
             "dialogue_samples": [],
@@ -126,13 +128,12 @@ class StageF(BaseStage):
                         )
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-基础样本] 解析章节 {chap_id} 失败: {e}")
-            stage_result.add_failure(chap_id, str(e), "F-basic")
+            if stage_result:
+                stage_result.add_failure(chap_id, str(e), "F-basic")
 
         return result
 
-    def _extract_advanced_samples(
-        self, text: str, chap_id: str
-    ) -> Dict[str, List[Dict]]:
+    def _extract_advanced_samples(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """批次2：提取进阶分析（叙事距离+Show/Tell+动作场景+高潮段落+金句）"""
         result = {
             "narrative_distance": [],
@@ -291,13 +292,70 @@ class StageF(BaseStage):
                         )
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-进阶样本] 解析章节 {chap_id} 失败: {e}")
-            stage_result.add_failure(chap_id, str(e), "F-advanced")
+            if stage_result:
+                stage_result.add_failure(chap_id, str(e), "F-advanced")
 
         return result
 
+    def _process_single_chapter(self, chap: Dict) -> Dict[str, Any]:
+        """
+        处理单章：提取基础样本 + 进阶样本 + 开头结尾（线程安全，无共享状态写入）
+        """
+        text = chap["text"]
+        chap_id = chap.get("id", "未知章节")
+
+        # 开头/结尾截取（不依赖 LLM）
+        opening_text = text[:200] if len(text) >= 200 else text
+        ending_text = text[-200:] if len(text) >= 200 else text
+
+        chapter_result = {
+            "chapter_opening_ending_samples": [
+                {
+                    "book_name": self.book_name,
+                    "chapter_id": chap_id,
+                    "sample_position": "opening",
+                    "original_text": opening_text,
+                    "technique_analysis": "",
+                    "hook_type": "",
+                },
+                {
+                    "book_name": self.book_name,
+                    "chapter_id": chap_id,
+                    "sample_position": "ending",
+                    "original_text": ending_text,
+                    "technique_analysis": "",
+                    "hook_type": "",
+                },
+            ],
+            "dialogue_samples": [],
+            "description_samples": [],
+            "transition_samples": [],
+            "narrative_distance": [],
+            "show_tell_patterns": [],
+            "action_scene_samples": [],
+            "climax_excerpts": [],
+            "memorable_quotes": [],
+        }
+
+        # 批次1：基础样本（对话+描写+转场）
+        basic_data = self._extract_basic_samples(text, chap_id)
+        chapter_result["dialogue_samples"] = basic_data["dialogue_samples"]
+        chapter_result["description_samples"] = basic_data["description_samples"]
+        chapter_result["transition_samples"] = basic_data["transition_samples"]
+
+        # 批次2：进阶分析（叙事距离+Show/Tell+动作场景+高潮段落+金句）
+        advanced_data = self._extract_advanced_samples(text, chap_id)
+        chapter_result["narrative_distance"] = advanced_data["narrative_distance"]
+        chapter_result["show_tell_patterns"] = advanced_data["show_tell_patterns"]
+        chapter_result["action_scene_samples"] = advanced_data["action_scene_samples"]
+        chapter_result["climax_excerpts"] = advanced_data["climax_excerpts"]
+        chapter_result["memorable_quotes"] = advanced_data["memorable_quotes"]
+
+        return chapter_result
+
     def run(self, chapters: List[Dict], **kwargs) -> Dict[str, List[Dict]]:
         """
-        执行 Stage F
+        执行 Stage F（并行处理章节，利用 STAGE_F_WORKERS 并发，支持断点续跑）
 
         Args:
             chapters: 章节列表
@@ -308,61 +366,78 @@ class StageF(BaseStage):
         logger.info(f"=== 阶段六：对话/描写/动作专项样本库提取 ({self.book_name}) ===")
         stage_result = StageResult()
 
+        # 数据键列表（用于合并结果）
+        DATA_KEYS = [
+            "dialogue_samples", "description_samples", "transition_samples",
+            "narrative_distance", "show_tell_patterns", "action_scene_samples",
+            "climax_excerpts", "memorable_quotes", "chapter_opening_ending_samples",
+        ]
+
         result = {
-            "dialogue_samples": [],
-            "description_samples": [],
-            "transition_samples": [],
-            "style_summaries": [],
-            "narrative_distance": [],
-            "show_tell_patterns": [],
-            "action_scene_samples": [],
-            "climax_excerpts": [],
-            "chapter_opening_ending_samples": [],
-            "memorable_quotes": [],
+            key: [] for key in DATA_KEYS
+        }
+        result["style_summaries"] = []
+        result["_chapter_summaries"] = {
+            chap.get("id", ""): chap.get("summary", "")
+            for chap in chapters if chap.get("id")
         }
 
-        for chap in tqdm(chapters, desc="提取样本库"):
-            text = chap["text"]
-            chap_id = chap.get("id", "未知章节")
+        # 断点恢复：加载已完成的章节结果
+        cache = self.load_cache()
+        completed_items = cache.get("data", []) if cache else []
+        completed_ids = {item.get("_chapter_id", "") for item in completed_items if item.get("_chapter_id")}
 
-            # 代码截取开头/结尾（不依赖 LLM，确保 100% 准确）
-            opening_text = text[:200] if len(text) >= 200 else text
-            ending_text = text[-200:] if len(text) >= 200 else text
+        # 合并缓存数据到主结果
+        for item in completed_items:
+            for key in DATA_KEYS:
+                result[key].extend(item.get(key, []))
 
-            result["chapter_opening_ending_samples"].append(
-                {
-                    "book_name": self.book_name,
-                    "chapter_id": chap_id,
-                    "sample_position": "opening",
-                    "original_text": opening_text,
-                    "technique_analysis": "",
-                    "hook_type": "",
+        if completed_ids:
+            logger.info(f"✅ [阶段F] 恢复断点：已完成 {len(completed_ids)}/{len(chapters)} 章")
+
+        # 过滤已完成的章节
+        pending = [c for c in chapters if c.get("id") not in completed_ids]
+        if not pending:
+            logger.info(f"[阶段F] 所有章节已处理完毕")
+        else:
+            # 并行处理未完成章节
+            workers = min(STAGE_F_WORKERS, len(pending))
+            logger.info(f"[阶段F] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 章")
+
+            processed_count = 0
+            checkpoint_interval = 10  # 每 10 章保存一次断点
+
+            with ThreadPoolExecutor(max_workers=max(workers, 1)) as executor:
+                futures = {
+                    executor.submit(self._process_single_chapter, chap): chap.get("id", "unknown")
+                    for chap in pending
                 }
-            )
-            result["chapter_opening_ending_samples"].append(
-                {
-                    "book_name": self.book_name,
-                    "chapter_id": chap_id,
-                    "sample_position": "ending",
-                    "original_text": ending_text,
-                    "technique_analysis": "",
-                    "hook_type": "",
-                }
-            )
 
-            # 批次1：基础样本（对话+描写+转场）
-            basic_data = self._extract_basic_samples(text, chap_id)
-            result["dialogue_samples"].extend(basic_data["dialogue_samples"])
-            result["description_samples"].extend(basic_data["description_samples"])
-            result["transition_samples"].extend(basic_data["transition_samples"])
+                try:
+                    for future in tqdm(as_completed(futures), total=len(futures), desc="提取样本库"):
+                        chap_id = futures[future]
+                        try:
+                            chapter_result = future.result()
+                            chapter_result["_chapter_id"] = chap_id
+                            completed_items.append(chapter_result)
+                            # 合并到主结果
+                            for key in DATA_KEYS:
+                                result[key].extend(chapter_result.get(key, []))
+                            processed_count += 1
+                            # 定期保存断点
+                            if processed_count % checkpoint_interval == 0:
+                                self.save_cache({"data": completed_items})
+                        except Exception as e:
+                            logger.warning(f"⚠️ [阶段F] 章节 {chap_id} 处理失败: {e}")
+                            stage_result.add_failure(chap_id, str(e), "F")
+                except KeyboardInterrupt:
+                    # 中断时立即保存进度
+                    logger.info(f"[阶段F] 用户中断，保存进度 ({len(completed_items)} 章已完成)...")
+                    self.save_cache({"data": completed_items})
+                    raise
 
-            # 批次2：进阶分析（叙事距离+Show/Tell+动作场景+高潮段落+金句）
-            advanced_data = self._extract_advanced_samples(text, chap_id)
-            result["narrative_distance"].extend(advanced_data["narrative_distance"])
-            result["show_tell_patterns"].extend(advanced_data["show_tell_patterns"])
-            result["action_scene_samples"].extend(advanced_data["action_scene_samples"])
-            result["climax_excerpts"].extend(advanced_data["climax_excerpts"])
-            result["memorable_quotes"].extend(advanced_data["memorable_quotes"])
+            # 最终保存断点
+            self.save_cache({"data": completed_items})
 
         # 生成风格总结（基于已提取的样本）
         logger.info(f"📊 [阶段F] 生成风格总结...")
@@ -515,6 +590,16 @@ class StageF(BaseStage):
             "memorable_quotes": 0,
         }
 
+        # 章节摘要索引：用于为 ChromaDB 样本附带剧情上下文
+        chapter_summaries = results.get("_chapter_summaries", {})
+
+        def get_chapter_context(chapter_id: str) -> str:
+            """获取章节的剧情摘要，作为样本的上下文"""
+            summary = chapter_summaries.get(chapter_id, "")
+            if summary and len(summary) > 150:
+                summary = summary[:150] + "..."
+            return summary
+
         # 对话样本入库
         for ds in results.get("dialogue_samples", []):
             ds_id = generate_id(
@@ -538,17 +623,22 @@ class StageF(BaseStage):
             )
             stats["dialogue_samples"] += 1
 
-        # ChromaDB: 对话样本
+        # ChromaDB: 对话样本（浅拷贝，不污染原始数据，附带章节上下文）
+        chroma_dialogue_items = []
         for ds in results.get("dialogue_samples", []):
-            ds["_chroma_text"] = (
+            chroma_item = {**ds}
+            ctx = get_chapter_context(ds.get("chapter_id", ""))
+            chroma_item["_chroma_text"] = (
                 f"场景:{ds['scene_type']}\n对话:{ds['original_text']}\n"
                 f"情绪张力:{ds.get('emotional_tension', '')}\n"
                 f"潜台词:{ds.get('subtext', '')}\n"
                 f"剧情作用:{ds.get('plot_function', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
+            chroma_dialogue_items.append(chroma_item)
         bulk_upsert_to_chroma(
             "dialogue_samples_kb",
-            results.get("dialogue_samples", []),
+            chroma_dialogue_items,
             id_fields=["book_name", "chapter_id", "scene_type", "original_text"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "scene_type"],
@@ -576,16 +666,21 @@ class StageF(BaseStage):
             )
             stats["description_samples"] += 1
 
-        # ChromaDB: 描写样本
+        # ChromaDB: 描写样本（浅拷贝，不污染原始数据，附带章节上下文）
+        chroma_desc_items = []
         for desc in results.get("description_samples", []):
-            desc["_chroma_text"] = (
+            chroma_item = {**desc}
+            ctx = get_chapter_context(desc.get("chapter_id", ""))
+            chroma_item["_chroma_text"] = (
                 f"类型:{desc['description_type']}\n描写:{desc['original_text']}\n"
                 f"技法:{desc.get('technique_analysis', '')}\n"
                 f"感官:{desc.get('sensory_details', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
+            chroma_desc_items.append(chroma_item)
         bulk_upsert_to_chroma(
             "description_samples_kb",
-            results.get("description_samples", []),
+            chroma_desc_items,
             id_fields=["book_name", "chapter_id", "description_type", "original_text"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "description_type"],
@@ -612,15 +707,20 @@ class StageF(BaseStage):
             )
             stats["transition_samples"] += 1
 
-        # ChromaDB: 转场样本
+        # ChromaDB: 转场样本（浅拷贝，不污染原始数据，附带章节上下文）
+        chroma_trans_items = []
         for trans in results.get("transition_samples", []):
-            trans["_chroma_text"] = (
+            chroma_item = {**trans}
+            ctx = get_chapter_context(trans.get("chapter_id", ""))
+            chroma_item["_chroma_text"] = (
                 f"转场类型:{trans['transition_type']}\n原文:{trans['original_text']}\n"
                 f"技法:{trans.get('technique_analysis', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
+            chroma_trans_items.append(chroma_item)
         bulk_upsert_to_chroma(
             "transition_samples_kb",
-            results.get("transition_samples", []),
+            chroma_trans_items,
             id_fields=["book_name", "chapter_id", "transition_type", "original_text"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "transition_type"],
@@ -701,7 +801,7 @@ class StageF(BaseStage):
             )
             stats["action_scene_samples"] += 1
 
-        # ChromaDB: 动作场景样本
+        # ChromaDB: 动作场景样本（附带章节上下文）
         a_ids, a_docs, a_metas = [], [], []
         for action in results.get("action_scene_samples", []):
             aid = generate_id(
@@ -711,10 +811,12 @@ class StageF(BaseStage):
                 action["original_text"][:50],
             )
             a_ids.append(aid)
+            ctx = get_chapter_context(action.get("chapter_id", ""))
             a_docs.append(
                 f"动作类型:{action['action_type']}\n原文:{action['original_text']}\n"
                 f"技法:{action.get('technique_analysis', '')}\n"
                 f"节奏:{action.get('pacing_analysis', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
             a_metas.append(
                 {
@@ -748,7 +850,7 @@ class StageF(BaseStage):
             )
             stats["climax_excerpts"] += 1
 
-        # ChromaDB: 高潮段落
+        # ChromaDB: 高潮段落（附带章节上下文）
         c_ids, c_docs, c_metas = [], [], []
         for climax in results.get("climax_excerpts", []):
             cid = generate_id(
@@ -758,10 +860,12 @@ class StageF(BaseStage):
                 climax["original_text"][:50],
             )
             c_ids.append(cid)
+            ctx = get_chapter_context(climax.get("chapter_id", ""))
             c_docs.append(
                 f"高潮类型:{climax['excerpt_type']}\n原文:{climax['original_text']}\n"
                 f"技法:{climax.get('technique_analysis', '')}\n"
                 f"情感冲击:{climax.get('emotional_impact', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
             c_metas.append(
                 {
@@ -827,11 +931,13 @@ class StageF(BaseStage):
                 quote["quote_text"][:50],
             )
             q_ids.append(qid)
+            ctx = get_chapter_context(quote.get("chapter_id", ""))
             q_docs.append(
                 f"金句:{quote['quote_text']}\n"
                 f"上下文:{quote.get('context', '')}\n"
                 f"技法:{quote.get('technique_analysis', '')}\n"
                 f"类型:{quote.get('quote_type', '')}"
+                + (f"\n剧情上下文:{ctx}" if ctx else "")
             )
             q_metas.append(
                 {

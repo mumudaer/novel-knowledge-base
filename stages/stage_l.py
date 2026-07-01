@@ -40,13 +40,13 @@ class StageL(BaseStage):
             "感情线设计": ("romance_lines", "couple_a"),
             "高潮铺垫方式": ("climax_buildup_chains", "climax_name"),
             "冲突升级模式": ("conflict_escalation", "conflict_line"),
-            "人物塑造": ("character_profiles_kb", "character_name"),
+            "人物塑造": ("character_profiles", "name"),
             "世界观设计": ("world_settings", "module"),
             "对话风格": ("character_speech_style", "character_name"),
             "描写技法": ("description_samples", "description_type"),
             "结构编排": ("book_structure", "structure_type"),
             "信息管理": ("information_management", "strategy_type"),
-            "伏笔设计": ("plot_foreshadowing", "foreshadow_type"),
+            "伏笔设计": ("plot_foreshadowing", "hook_name"),
         }
         
         table_info = dimension_table_map.get(dimension)
@@ -133,10 +133,10 @@ class StageL(BaseStage):
         if not analysis:
             return stats
 
+        # ID 不含时间戳，保证幂等性：重复运行相同维度会覆盖旧记录
         comparison_id = generate_id(
             results["comparison_dimension"],
             "_".join(results["books_analyzed"]),
-            datetime.now().isoformat(),
         )
 
         cursor.execute(

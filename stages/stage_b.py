@@ -74,7 +74,7 @@ class StageB(BaseStage):
         # 恢复断点
         cache = self.load_cache()
         success_list = cache.get("data", []) if cache else []
-        completed_ids = {x["chapter_id"] for x in success_list}
+        completed_ids = {x.get("chapter_id", "") for x in success_list if x.get("chapter_id")}
         if completed_ids:
             print(f"✅ [阶段B] 恢复断点：已完成 {len(completed_ids)} 章")
 
@@ -101,10 +101,56 @@ class StageB(BaseStage):
 
         return success_list
 
+    @staticmethod
+    def _merge_slices(results: List[Dict]) -> List[Dict]:
+        """
+        轻量合并：同一章的多个切片合并 narrative_skills，保留各自的 scene_type。
+        例如：第3章_1 和 第3章_2 的技法合并到同一个 “第3章” 记录下。
+        """
+        import re as _re
+        import copy
+        from collections import defaultdict
+
+        # 去除切片后缀：第3章_1 → 第3章，第3章_2 → 第3章
+        def clean_chapter_id(cid: str) -> str:
+            return _re.sub(r"_\d+$", "", cid)
+
+        merge_map = defaultdict(list)
+        for item in results:
+            raw_id = item.get("chapter_id", "")
+            pure_id = clean_chapter_id(raw_id)
+            item["chapter_id"] = pure_id
+            merge_map[pure_id].append(item)
+
+        merged = []
+        for chap_id, slices in merge_map.items():
+            if len(slices) == 1:
+                merged.append(slices[0])
+                continue
+
+            # 多切片合并：取第一个作为基础，合并 narrative_skills
+            base = copy.deepcopy(slices[0])
+            all_skills = []
+            seen_skill_names = set()
+            for sl in slices:
+                for skill in sl.get("narrative_skills", []):
+                    sname = skill.get("skill_name", "")
+                    if sname and sname not in seen_skill_names:
+                        all_skills.append(skill)
+                        seen_skill_names.add(sname)
+            base["narrative_skills"] = all_skills
+            # scene_type 不合并，保留第一个切片的场景类型
+            merged.append(base)
+
+        return merged
+
     def insert(self, results: List[Dict]) -> Dict[str, int]:
-        """将 Stage B 结果写入数据库"""
+        """将 Stage B 结果写入数据库（含轻量合并：同一章的多个切片合并 narrative_skills）"""
         cursor = self.db.connect().cursor()
         stats = {"skills_db": 0, "skills_chroma": 0}
+
+        # 轻量合并：同一章的多个切片（如 第3章_1、第3章_2）合并 narrative_skills
+        results = self._merge_slices(results)
 
         skill_collection = self.chroma.get_collection("novel_skills")
 

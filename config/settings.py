@@ -29,6 +29,7 @@ STAGE_K_MODEL = (
 STAGE_L_MODEL = "qwen14b:latest"  # 高复杂度：跨书对比分析
 STAGE_M_MODEL = "qwen14b:latest"  # 高复杂度：错误模式归纳
 STAGE_N_MODEL = "qwen14b:latest"  # 高复杂度：技法组合分析
+STAGE_O_MODEL = "qwen14b:latest"  # 高复杂度：事件因果图谱分析
 STAGE_CTX_MODEL = "qwen2.5:7b"  # 中复杂度：上下文场景识别
 
 # Ollama API 配置
@@ -50,6 +51,7 @@ STAGE_K_WORKERS = 1  # 7b 模型，单并发（推荐以保证质量）
 STAGE_L_WORKERS = 1  # 14b 模型，单并发（分析任务较重）
 STAGE_M_WORKERS = 1  # 14b 模型，单并发（归纳任务较重）
 STAGE_N_WORKERS = 1  # 14b 模型，单并发（分析任务较重）
+STAGE_O_WORKERS = 1  # 14b 模型，单并发（全书级因果分析）
 STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 
 # 上下文长度配置（根据模型能力和显存限制）
@@ -61,10 +63,13 @@ OLLAMA_TIMEOUT = 600  # 超时时间（秒）
 
 # Embedding 模型配置（中文优化）
 # bge-m3 是 BAAI 发布的多语言 embedding 模型，中文语义检索质量远优于 ChromaDB 默认的英文模型
+# 注意：EMBEDDING_DEVICE 必须设为 "cpu"，因为 embedding 和 LLM 推理会同时加载，
+# GPU 显存只有 16GB，bge-m3(cuda ~2GB) + qwen3:14b(~10GB) 会 OOM。
+# embedding 在 CPU 上运行足够快（每批 ~50 条约 1-2 秒），不影响整体性能。
 EMBEDDING_MODEL = "bge-m3"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"  # HuggingFace 模型名（sentence-transformers 使用）
 EMBEDDING_DIMENSION = 1024
-EMBEDDING_DEVICE = "cuda"  # cuda 或 cpu，构建期 GPU 加速，服务期按需
+EMBEDDING_DEVICE = "cpu"  # 强制 CPU，避免与 LLM 推理抢占 GPU 显存
 
 # 文本切分配置
 SPLIT_THRESHOLD = 5000  # 章节切分阈值（字符数），提升以更好利用 14b 模型 8192 上下文
@@ -117,84 +122,105 @@ MODEL_CONFIG = {
         "workers": STAGE_A_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,  # 从 3b 升级为 7b，使用 7b 上下文配置
         "temperature": 0.1,
+        "num_predict": 2048,  # 单章摘要，2048 足够
     },
     "B": {
         "model": STAGE_B_MODEL,
         "workers": STAGE_B_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
+        "num_predict": 2048,  # 技法提取，中等输出
     },
     "C": {
         "model": STAGE_C_MODEL,
         "workers": STAGE_C_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.3,
+        "num_predict": 2048,  # 文风指纹，中等输出
     },
     "D": {
         "model": STAGE_D_MODEL,
         "workers": STAGE_D_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.1,
+        "num_predict": 4096,  # 世界观7维+人物33维，重输出
     },
     "E": {
         "model": STAGE_E_MODEL,
         "workers": STAGE_E_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
+        "num_predict": 2048,  # 卷大纲聚合，中等输出
     },
     "F": {
         "model": STAGE_F_MODEL,
         "workers": STAGE_F_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
+        "num_predict": 4096,  # 5类进阶样本+技法分析，重输出
     },
     "G": {
         "model": STAGE_G_MODEL,
         "workers": STAGE_G_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
+        "num_predict": 2048,  # 人物深度分析，中等输出
     },
     "H": {
         "model": STAGE_H_MODEL,
         "workers": STAGE_H_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
+        "num_predict": 4096,  # 5个子结构同时输出，重输出
     },
     "J": {
         "model": STAGE_J_MODEL,
         "workers": STAGE_J_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
+        "num_predict": 2048,
     },
     "K": {
         "model": STAGE_K_MODEL,
         "workers": STAGE_K_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
+        "num_predict": 2048,
     },
     "L": {
         "model": STAGE_L_MODEL,
         "workers": STAGE_L_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.3,
+        "num_predict": 4096,  # 跨书对比分析，重输出
     },
     "M": {
         "model": STAGE_M_MODEL,
         "workers": STAGE_M_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.3,
+        "num_predict": 4096,  # 错误模式提取，重输出
     },
     "N": {
         "model": STAGE_N_MODEL,
         "workers": STAGE_N_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.3,
+        "num_predict": 4096,  # 技法组合模板，重输出
+    },
+    "O": {
+        "model": STAGE_O_MODEL,
+        "workers": STAGE_O_WORKERS,
+        "num_ctx": OLLAMA_NUM_CTX_14B,
+        "temperature": 0.2,
+        "num_predict": 4096,  # 事件因果图谱，重输出
     },
     "CTX": {
         "model": STAGE_CTX_MODEL,
         "workers": STAGE_CTX_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
+        "num_predict": 2048,
     },
 }
 

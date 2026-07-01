@@ -7,12 +7,14 @@ Stage D: 世界观与人物深度自动提取（重做版）
 import json
 import logging
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
 from core.stage_result import StageResult
 from core.chroma_utils import bulk_upsert_to_chroma
+from config.settings import STAGE_D_WORKERS
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,7 @@ class StageD(BaseStage):
         )
         return sampled_chapters
 
-    def _extract_world_group(self, text: str, chap_id: str) -> Dict[str, List[Dict]]:
+    def _extract_world_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """提取世界观组：world_settings + world_timeline + faction_networks"""
         result = {"world_settings": [], "world_timeline": [], "faction_networks": []}
 
@@ -172,13 +174,12 @@ class StageD(BaseStage):
                         )
         except Exception as e:
             logger.warning(f"⚠️ [阶段D-世界观] 解析章节 {chap_id} 失败: {e}")
-            stage_result.add_failure(chap_id, str(e), "D-world")
-
+            if stage_result:
+                stage_result.add_failure(chap_id, str(e), "D-world")
+        
         return result
 
-    def _extract_character_group(
-        self, text: str, chap_id: str
-    ) -> Dict[str, List[Dict]]:
+    def _extract_character_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """提取人物组：character_profiles（33维度）"""
         result = {"character_profiles": []}
 
@@ -277,13 +278,40 @@ class StageD(BaseStage):
                         )
         except Exception as e:
             logger.warning(f"⚠️ [阶段D-人物] 解析章节 {chap_id} 失败: {e}")
-            stage_result.add_failure(chap_id, str(e), "D-character")
-
+            if stage_result:
+                stage_result.add_failure(chap_id, str(e), "D-character")
+        
         return result
+
+    def _process_single_chapter(self, chap: Dict) -> Dict[str, List[Dict]]:
+        """
+        处理单章：提取世界观组 + 人物组（线程安全）
+        """
+        text = chap["text"]
+        chap_id = chap.get("id", "未知章节")
+
+        chapter_result = {
+            "world_settings": [],
+            "character_profiles": [],
+            "world_timeline": [],
+            "faction_networks": [],
+        }
+
+        # 批次1：世界观 + 编年史 + 势力网络
+        world_data = self._extract_world_group(text, chap_id)
+        chapter_result["world_settings"] = world_data["world_settings"]
+        chapter_result["world_timeline"] = world_data["world_timeline"]
+        chapter_result["faction_networks"] = world_data["faction_networks"]
+
+        # 批次2：人物深度档案
+        char_data = self._extract_character_group(text, chap_id)
+        chapter_result["character_profiles"] = char_data["character_profiles"]
+
+        return chapter_result
 
     def run(self, chapters: List[Dict], **kwargs) -> Dict[str, List[Dict]]:
         """
-        执行 Stage D
+        执行 Stage D（并行处理采样章节，利用 STAGE_D_WORKERS 并发，支持断点续跑）
 
         Args:
             chapters: 章节列表
@@ -294,30 +322,58 @@ class StageD(BaseStage):
         stage_result = StageResult()
         logger.info(f"=== 阶段四：世界观与人物深度自动提取 ({self.book_name}) ===")
 
-        result = {
-            "world_settings": [],
-            "character_profiles": [],
-            "world_timeline": [],
-            "faction_networks": [],
-        }
+        DATA_KEYS = ["world_settings", "character_profiles", "world_timeline", "faction_networks"]
+        result = {key: [] for key in DATA_KEYS}
 
         # 智能采样
         sampled_chapters = self._select_sample_chapters(chapters)
 
-        # 按采样章节分批提取（世界观组 + 人物组，降低单次 Prompt 复杂度）
-        for chap in tqdm(sampled_chapters, desc="提取世界观与人物"):
-            text = chap["text"]
-            chap_id = chap.get("id", "未知章节")
+        # 断点恢复
+        cache = self.load_cache()
+        completed_items = cache.get("data", []) if cache else []
+        completed_ids = {item.get("_chapter_id", "") for item in completed_items if item.get("_chapter_id")}
 
-            # 批次1：世界观 + 编年史 + 势力网络
-            world_data = self._extract_world_group(text, chap_id)
-            result["world_settings"].extend(world_data["world_settings"])
-            result["world_timeline"].extend(world_data["world_timeline"])
-            result["faction_networks"].extend(world_data["faction_networks"])
+        for item in completed_items:
+            for key in DATA_KEYS:
+                result[key].extend(item.get(key, []))
 
-            # 批次2：人物深度档案
-            char_data = self._extract_character_group(text, chap_id)
-            result["character_profiles"].extend(char_data["character_profiles"])
+        if completed_ids:
+            logger.info(f"✅ [阶段D] 恢复断点：已完成 {len(completed_ids)}/{len(sampled_chapters)} 章")
+
+        pending = [c for c in sampled_chapters if c.get("id") not in completed_ids]
+        if not pending:
+            logger.info(f"[阶段D] 所有采样章节已处理完毕")
+        else:
+            workers = min(STAGE_D_WORKERS, len(pending))
+            logger.info(f"[阶段D] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 个采样章节")
+
+            processed_count = 0
+            with ThreadPoolExecutor(max_workers=max(workers, 1)) as executor:
+                futures = {
+                    executor.submit(self._process_single_chapter, chap): chap.get("id", "unknown")
+                    for chap in pending
+                }
+                try:
+                    for future in tqdm(as_completed(futures), total=len(futures), desc="提取世界观与人物"):
+                        chap_id = futures[future]
+                        try:
+                            chapter_result = future.result()
+                            chapter_result["_chapter_id"] = chap_id
+                            completed_items.append(chapter_result)
+                            for key in DATA_KEYS:
+                                result[key].extend(chapter_result.get(key, []))
+                            processed_count += 1
+                            if processed_count % 5 == 0:
+                                self.save_cache({"data": completed_items})
+                        except Exception as e:
+                            logger.warning(f"⚠️ [阶段D] 章节 {chap_id} 处理失败: {e}")
+                            stage_result.add_failure(chap_id, str(e), "D")
+                except KeyboardInterrupt:
+                    logger.info(f"[阶段D] 用户中断，保存进度 ({len(completed_items)} 章已完成)...")
+                    self.save_cache({"data": completed_items})
+                    raise
+
+            self.save_cache({"data": completed_items})
 
         logger.info(
             f"✅ [阶段D战报] 世界观: {len(result['world_settings'])} 条, "
@@ -373,18 +429,21 @@ class StageD(BaseStage):
             )
             stats["world_settings"] += 1
 
-        # ChromaDB: 世界观
+        # ChromaDB: 世界观（构建独立的 ChromaDB 数据，不污染原始数据）
+        chroma_world_items = []
         for ws in results.get("world_settings", []):
-            ws["_chroma_text"] = (
+            chroma_item = {**ws}  # 浅拷贝，避免修改原始字典
+            chroma_item["_chroma_text"] = (
                 f"模块:{ws['module']}\n实体:{ws['entity']}\n设定:{ws['content']}\n"
                 f"日常生活:{ws.get('daily_life', '')}\n禁忌:{ws.get('taboos', '')}\n"
                 f"冲突根源:{ws.get('conflict_roots', '')}\n地理:{ws.get('geography', '')}\n"
                 f"经济:{ws.get('economy', '')}\n文化:{ws.get('culture', '')}\n"
                 f"因果链:{ws.get('causal_chain', '')}"
             )
+            chroma_world_items.append(chroma_item)
         bulk_upsert_to_chroma(
             "world_settings_kb",
-            results.get("world_settings", []),
+            chroma_world_items,
             id_fields=["book_name", "module", "entity"],
             text_field="_chroma_text",
             metadata_fields=[
@@ -440,9 +499,11 @@ class StageD(BaseStage):
             )
             stats["character_profiles"] += 1
 
-        # ChromaDB: 人物档案
+        # ChromaDB: 人物档案（构建独立的 ChromaDB 数据，不污染原始数据）
+        chroma_char_items = []
         for cp in results.get("character_profiles", []):
-            cp["_chroma_text"] = (
+            chroma_item = {**cp}  # 浅拷贝
+            chroma_item["_chroma_text"] = (
                 f"定位:{cp.get('role_type', '未知')}\n"
                 f"外貌:{cp.get('appearance', '无')}\n"
                 f"微表情/口癖:{cp.get('quirks', '无')}\n"
@@ -472,9 +533,10 @@ class StageD(BaseStage):
                 f"转变触发器:{cp.get('transformation_trigger', '')}\n"
                 f"对比设计:{cp.get('contrast_design', '')}"
             )
+            chroma_char_items.append(chroma_item)
         bulk_upsert_to_chroma(
             "character_profiles_kb",
-            results.get("character_profiles", []),
+            chroma_char_items,
             id_fields=["book_name", "name", "profile"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "author", "category", "name", "role_type"],

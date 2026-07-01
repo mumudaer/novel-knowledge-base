@@ -121,7 +121,8 @@ class StageA(BaseStage):
             safe_state_str = compress_state_to_text(compressed_state)
 
             category_prompt = ""
-            if finish_count + idx == 0:
+            # 第一章或断点恢复后主角名未识别时，触发分类推断
+            if finish_count + idx == 0 or (idx == 0 and not protagonist_names):
                 category_prompt = '\n  "inferred_category": "推断题材(玄幻/都市/悬疑等，限2-4字)",\n  "protagonist_names": ["主角名1", "主角名2"],'
 
             prompt = f"""你是专业的小说剧情摘要助手。结合前文笔记生成本章摘要与人物状态。仅输出JSON。
@@ -153,13 +154,14 @@ class StageA(BaseStage):
                 chap["scene_transitions"] = data.get("scene_transitions", {})
                 consecutive_fails = 0
 
-                if finish_count + idx == 0:
+                if finish_count + idx == 0 or (idx == 0 and not protagonist_names):
                     if data.get("inferred_category"):
                         inferred_category = data["inferred_category"].strip()
                     if isinstance(data.get("protagonist_names"), list):
                         protagonist_names = set(data["protagonist_names"])
-            except Exception:
+            except Exception as e:
                 consecutive_fails += 1
+                logger.warning(f"章节 {chap.get('id', 'unknown')} 处理失败: {e}")
                 chap["character_state"] = flatten_character_state({"旁白": "断层"})
                 chap["summary"] = "处理失败"
                 chap["key_events"] = []
@@ -258,18 +260,30 @@ class StageA(BaseStage):
                 )
                 stats["plot_arcs"] += 1
 
-            # 图谱人物节点
+        self.db.commit()
+
+        # 图谱人物节点（提前加载图谱，避免循环内重复 load()）
+        graph = self.graph.load()
+        for chap in tqdm(processed_chaps, desc="入库图谱"):
             for char_name, char_state in chap.get("character_state", {}).items():
                 if char_name in ("_raw", "旁白"):
                     continue
                 char_node = f"char:{char_name}"
-                if not self.graph.load().has_node(char_node):
+                if not graph.has_node(char_node):
                     stats["graph_nodes"] += 1
-                self.graph.add_node(char_node, node_type="character", book_list=self.book_name)
-                self.graph.safe_append_edge_attr(
-                    char_node, f"chap:{chap['id']}", "action", str(char_state)[:50]
-                )
+                # 直接用本地 graph 变量操作，避免 self.graph.add_node 内部再调 load()
+                graph.add_node(char_node, node_type="character", book_list=self.book_name)
+                chap_edge = f"chap:{chap['id']}"
+                if not graph.has_edge(char_node, chap_edge):
+                    graph.add_edge(char_node, chap_edge, action=str(char_state)[:50])
+                else:
+                    existing = graph[char_node][chap_edge].get("action", "")
+                    action_val = str(char_state)[:50]
+                    # 用管道符分割后精确匹配去重，避免子串误判
+                    existing_list = [x.strip() for x in existing.split("|") if x.strip()] if existing else []
+                    if action_val not in existing_list:
+                        existing_list.append(action_val)
+                        graph[char_node][chap_edge]["action"] = "|".join(existing_list)
 
-        self.db.commit()
-        logger.info(f"   ✅ [阶段A战报] plot_arcs 新增: {stats['plot_arcs']} 条 | 图谱人物节点: {stats['graph_nodes']} 个")
+        logger.info(f"   \u2705 [阶段A战报] plot_arcs 新增: {stats['plot_arcs']} 条 | 图谱人物节点: {stats['graph_nodes']} 个")
         return stats

@@ -3,6 +3,7 @@
 封装 NetworkX 图谱的初始化、节点/边操作、持久化
 """
 import os
+import re
 import threading
 import networkx as nx
 import logging
@@ -14,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 class GraphManager:
     """知识图谱管理器"""
+
+    # 预编译正则，避免每次调用都重新编译
+    _ILLEGAL_XML_RE = re.compile(
+        "[\x00-\x08\x0b\x0c\x0e-\x1F\uD800-\uDFFF\uFFFE\uFFFF]"
+    )
 
     def __init__(self, graph_path: Optional[str] = None):
         """初始化图谱管理器"""
@@ -58,27 +64,24 @@ class GraphManager:
 
     def _sanitize_graph(self) -> nx.DiGraph:
         """清理图谱中的非法字符（GraphML 格式要求）"""
+        import json as _json
         sanitized = nx.DiGraph()
 
+        def clean_val(v):
+            if v is None:
+                return ""
+            if isinstance(v, (dict, list)):
+                return _json.dumps(v, ensure_ascii=False)  # dict/list 转为合法 JSON 字符串
+            if isinstance(v, str):
+                return self._clean_xml_chars(v)  # 清理 XML 非法字符
+            return str(v)
+
         for node, data in self.graph.nodes(data=True):
-            clean_data = {}
-            for key, value in data.items():
-                if isinstance(value, str):
-                    # 清理 XML 非法字符
-                    clean_value = self._clean_xml_chars(value)
-                    clean_data[key] = clean_value
-                else:
-                    clean_data[key] = str(value)
+            clean_data = {k: clean_val(v) for k, v in data.items()}
             sanitized.add_node(node, **clean_data)
 
         for u, v, data in self.graph.edges(data=True):
-            clean_data = {}
-            for key, value in data.items():
-                if isinstance(value, str):
-                    clean_value = self._clean_xml_chars(value)
-                    clean_data[key] = clean_value
-                else:
-                    clean_data[key] = str(value)
+            clean_data = {k: clean_val(val) for k, val in data.items()}
             sanitized.add_edge(u, v, **clean_data)
 
         return sanitized
@@ -86,12 +89,7 @@ class GraphManager:
     @staticmethod
     def _clean_xml_chars(text: str) -> str:
         """清理 XML 非法字符"""
-        import re
-        # 移除 XML 1.0 非法字符
-        illegal_xml_re = re.compile(
-            "[\x00-\x08\x0b\x0c\x0e-\x1F\uD800-\uDFFF\uFFFE\uFFFF]"
-        )
-        return illegal_xml_re.sub("", text)
+        return GraphManager._ILLEGAL_XML_RE.sub("", text)
 
     def add_node(self, node_id: str, **attributes):
         """添加节点"""
@@ -106,16 +104,19 @@ class GraphManager:
     def safe_append_edge_attr(
         self, source: str, target: str, attr_name: str, attr_value: str
     ):
-        """安全地追加边的属性值（用 | 分隔）"""
+        """安全地追加边的属性值（按逗号分割去重，避免子串误判）"""
+        if not attr_value:
+            return
         graph = self.load()
-        
+
         if not graph.has_edge(source, target):
             graph.add_edge(source, target, **{attr_name: attr_value})
         else:
-            existing = graph[source][target].get(attr_name, "")
-            if attr_value not in existing:
-                new_value = f"{existing}|{attr_value}" if existing else attr_value
-                graph[source][target][attr_name] = new_value
+            old_val = str(graph[source][target].get(attr_name, ""))
+            old_list = [x.strip() for x in old_val.split(",") if x.strip()] if old_val else []
+            if attr_value not in old_list:
+                old_list.append(attr_value)
+            graph[source][target][attr_name] = ",".join(old_list)
 
 
 # 全局图谱管理器实例

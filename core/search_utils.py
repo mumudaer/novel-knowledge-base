@@ -2,32 +2,53 @@
 混合检索工具模块
 提供统一的混合检索接口，支持向量召回 + SQL 过滤 + 去重合并
 """
+import re
+import logging
 from typing import Optional, List, Dict, Any
 from core.db import get_db_manager
 from core.chroma_client import get_chroma_manager
 
+logger = logging.getLogger(__name__)
+
 # 表名白名单，防止 SQL 注入
 ALLOWED_TABLES = {
-    "world_settings",
-    "character_profiles",
-    "dialogue_samples",
-    "description_samples",
-    "transition_samples",
-    "narrative_distance",
-    "show_tell_patterns",
-    "style_summaries",
-    "genre_specific_techniques",
-    "fear_building",
+    # Stage A
     "plot_arcs",
-    "book_structure",
-    "macro_outlines",
-    "climax_buildup_chains",
-    "conflict_escalation",
-    "information_management",
-    "action_scene_samples",
-    "character_speech_style",
-    "character_behavior_marks",
+    # Stage B
+    "skills",
+    # Stage C
+    "author_fingerprints", "sensory_mappings",
+    # Stage D
+    "world_settings", "character_profiles", "world_timeline",
+    "faction_networks", "setting_evolutions",
+    # Stage E
+    "macro_outlines", "plot_foreshadowing", "entity_state_tracker", "chapter_functions",
+    # Stage F
+    "dialogue_samples", "description_samples", "transition_samples", "style_summaries",
+    "action_scene_samples", "climax_excerpts", "memorable_quotes",
+    "chapter_opening_ending_samples", "narrative_distance", "show_tell_patterns",
+    # Stage G
+    "character_speech_style", "character_behavior_marks", "character_relationship_dynamics",
+    # Stage H
+    "book_structure", "plot_lines", "emotional_arc", "climax_point_distribution",
+    "symbol_system", "revelation_pacing", "chapter_patterns",
+    "emotion_transition_patterns", "information_management",
+    "climax_buildup_chains", "conflict_escalation",
+    # Stage I
+    "book_statistics",
+    # 通用类型补强
+    "romance_lines", "mystery_clues", "fear_building", "progression_systems",
+    "genre_specific_techniques", "pov_switching_patterns",
+    # 高级功能
+    "cross_book_comparisons", "common_mistakes", "technique_combinations",
+    # 元数据与服务层
+    "book_metadata", "chapter_reviews", "kb_references", "search_logs", "quality_checks",
+    # Stage O: 事件因果图谱
+    "story_events", "event_causal_edges",
 }
+
+# 字段名白名单，防止 SQL 注入（仅允许字母、数字、下划线）
+_FIELD_NAME_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
 def hybrid_search(
@@ -105,6 +126,10 @@ def hybrid_search(
     if filters:
         for field, value in filters.items():
             if value:
+                # 字段名白名单校验，防止 SQL 注入
+                if not _FIELD_NAME_RE.match(field):
+                    logger.warning(f"跳过非法字段名: {field}")
+                    continue
                 if field == "book_name":
                     sql_query += f" AND {field} = ?"
                 else:
@@ -116,8 +141,11 @@ def hybrid_search(
     cursor.execute(sql_query, params)
     rows = cursor.fetchall()
 
+    # 使用 cursor.description 获取实际列名，避免与传入的 columns 顺序不匹配
+    actual_columns = [desc[0] for desc in cursor.description] if cursor.description else columns
+
     for row in rows:
-        row_dict = dict(zip(columns, row))
+        row_dict = dict(zip(actual_columns, row))
         row_id = row_dict.get("id", "")
         if row_id and row_id not in seen_ids:
             seen_ids.add(row_id)

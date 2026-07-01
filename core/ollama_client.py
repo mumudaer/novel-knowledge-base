@@ -16,7 +16,6 @@ from config.settings import (
     OLLAMA_API_URL,
     OLLAMA_BASE_URL,
     OLLAMA_TIMEOUT,
-    OLLAMA_NUM_PREDICT,
     MODEL_CONFIG,
     HTTP_POOL_CONNECTIONS,
     HTTP_POOL_MAXSIZE,
@@ -175,6 +174,7 @@ class OllamaClient:
         config = get_model_config(stage)
         model = config["model"]
         num_ctx = config["num_ctx"]
+        num_predict = config.get("num_predict", 2048)  # 从 Stage 配置读取，默认 2048
 
         # 显存分时复用：确保当前模型已加载，必要时卸载旧模型
         vram = get_vram_manager()
@@ -183,44 +183,52 @@ class OllamaClient:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
+            "stream": True,  # 流式模式：对长响应更稳定，不会因响应太大导致一次性返回超时
             "options": {
                 "temperature": temperature,
                 "num_ctx": num_ctx,
-                "num_predict": 2048,
+                "num_predict": num_predict,
+                "num_gpu": 99,  # 强制模型留在 GPU，防止 Ollama 偷偷卸载到 CPU 导致卡死
             },
         }
 
         for attempt in range(max_retries):
             try:
-                resp = self.session.post(
+                with self.session.post(
                     OLLAMA_API_URL,
                     json=payload,
-                    timeout=OLLAMA_TIMEOUT,
-                )
-                resp.raise_for_status()
-                result = resp.json()
-
-                if "message" in result and "content" in result["message"]:
-                    return result["message"]["content"]
-                else:
-                    logger.warning(f"⚠️ API 响应格式异常: {result}")
-                    return ""
+                    stream=True,
+                    timeout=(30, OLLAMA_TIMEOUT),  # (连接超时, 读取超时)
+                ) as resp:
+                    resp.raise_for_status()
+                    full_content = []
+                    for line in resp.iter_lines():
+                        if line:
+                            try:
+                                json_resp = json.loads(line.decode("utf-8"))
+                                if (
+                                    "message" in json_resp
+                                    and "content" in json_resp["message"]
+                                ):
+                                    full_content.append(json_resp["message"]["content"])
+                            except json.JSONDecodeError:
+                                continue
+                    return "".join(full_content)
 
             except requests.exceptions.Timeout:
-                logger.warning(f"⚠️ 请求超时 (尝试 {attempt + 1}/{max_retries})")
+                logger.warning(f"\u26a0\ufe0f 请求超时 (尝试 {attempt + 1}/{max_retries})")
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)
                 continue
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"❌ 请求失败: {e}")
+                logger.error(f"\u2764 请求失败: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)
                 continue
 
             except Exception as e:
-                logger.error(f"❌ 未知错误: {e}")
+                logger.error(f"\u2764 未知错误: {e}")
                 return ""
 
         logger.error(f"❌ 达到最大重试次数，返回空响应")
@@ -236,7 +244,11 @@ JSON_BLOCK_RE = re.compile(r"`{3}json\s*(\{.*\})\s*`{3}", re.DOTALL)
 
 
 def extract_raw_json(text: str) -> str:
-    """从文本中提取 JSON 字符串"""
+    """
+    从文本中提取 JSON 字符串。
+    使用括号计数状态机：跟踪花括号嵌套深度 + 字符串上下文 + 转义字符，
+    能正确处理 LLM 输出中的嵌套 JSON 和字符串内的花括号。
+    """
     if not text:
         return ""
 
@@ -245,18 +257,38 @@ def extract_raw_json(text: str) -> str:
     if match:
         return match.group(1).strip()
 
-    # 尝试直接提取 {...}
-    text = text.strip()
-    if text.startswith("{") and text.endswith("}"):
+    # 括号计数状态机
+    start = text.find("{")
+    if start == -1:
         return text
 
-    # 尝试找到第一个 { 和最后一个 }
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+    brace_count = 0
+    in_string = False
+    escape = False
+    last_open_brace_idx = -1  # 只跟踪 { 的位置，用于未闭合时截断
 
-    return ""
+    for idx, char in enumerate(text[start:]):
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+        if not in_string:
+            if char == "{":
+                brace_count += 1
+                last_open_brace_idx = idx
+            elif char == "}":
+                brace_count -= 1
+                if brace_count == 0:
+                    return text[start : start + idx + 1]
+
+    # 未闭合括号，尝试修复：从最后一个 { 处截断并补齐 }
+    if last_open_brace_idx != -1:
+        return text[start : start + last_open_brace_idx + 1] + "}" * brace_count
+    return text[start:]
 
 
 def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
@@ -273,8 +305,6 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
     except json.JSONDecodeError:
         # 尝试使用 json_repair 修复
         try:
-            import json_repair
-
             return json_repair.repair_json(raw, return_objects=True)
         except Exception:
             pass

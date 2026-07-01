@@ -38,6 +38,7 @@ class WorldSettingsItem(BaseModel):
     economy: str = ""
     culture: str = ""
     causal_chain: str = ""
+    rules_exceptions: str = ""
 
 
 class WorldTimelineItem(BaseModel):
