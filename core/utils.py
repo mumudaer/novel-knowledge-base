@@ -285,13 +285,13 @@ def smart_split_chapters(
         )
 
     # === 第三步：对过长章节进行二次切分（语义边界 + 滑动窗口） ===
-    _long_chapters = [c for c in chapters if len(c["text"]) > max_chunk * 2]
+    _long_chapters = [c for c in chapters if len(c["text"]) > max_chunk]
     if _long_chapters:
         logger.info(f"《{book_name}》 smart_split 步骤3: {len(_long_chapters)} 个过长章节需要二次切分 (max_chunk={max_chunk})")
     final_chapters = []
     _step3_max_iterations = len(text) // 100 + 1000  # 安全上限：防止死循环
     for chap in chapters:
-        if len(chap["text"]) > max_chunk * 2:
+        if len(chap["text"]) > max_chunk:
             text_content = chap["text"]
             pos = 0
             sub_index = 1
