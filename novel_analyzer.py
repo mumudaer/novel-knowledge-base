@@ -293,6 +293,9 @@ def run_layer_1(book_name: str, category: str, chapters: List[Dict], manifest: D
                 if i < len(chapters):
                     chapters[i]["summary"] = item.get("summary", "")
                     chapters[i]["character_state"] = item.get("character_state", {})
+                    chapters[i]["information_flow"] = item.get("information_flow", {})
+                    chapters[i]["emotion_arc"] = item.get("emotion_arc", "")
+                    chapters[i]["time_progression"] = item.get("time_progression", "")
             inferred_cat = cache.get("inferred_category", category)
             protagonist_names = set(cache.get("protagonist_names", []))
             return chapters, inferred_cat, protagonist_names

@@ -89,8 +89,21 @@ _STRONG_CHAPTER_RE = re.compile(
 )
 
 # 作者的话块状区域检测关键词
-_AUTHOR_NOTE_TRIGGERS = ("作者的话", "作者说", "PS", "ps", "Ps")
+_AUTHOR_NOTE_TRIGGERS_CN = ("作者的话", "作者说", "题外话", "碎碎念")  # 中文触发词（子串匹配）
+_PS_TRIGGER_RE = re.compile(r"^(PS|ps|Ps|pS)[\uff1a:\s]|^(PS|ps|Ps|pS)$")  # PS 需要行首 + 冒号/空白/行尾
 _CHAPTER_HEADER_RE = re.compile(r"^第[零一二三四五六七八九十百千万两\d]+[章节回]")
+
+
+def _is_author_note_trigger(stripped: str) -> bool:
+    """检查行是否是作者话块的起始行"""
+    # 中文触发词：子串匹配
+    for trigger in _AUTHOR_NOTE_TRIGGERS_CN:
+        if trigger in stripped:
+            return True
+    # PS 触发：行首 + 后跟冒号/空白/行尾
+    if _PS_TRIGGER_RE.match(stripped):
+        return True
+    return False
 
 
 def _remove_author_note_blocks(text: str) -> str:
@@ -112,7 +125,7 @@ def _remove_author_note_blocks(text: str) -> str:
             # 否则跳过该行
         else:
             # 检查是否触发作者话块
-            if any(trigger in stripped for trigger in _AUTHOR_NOTE_TRIGGERS):
+            if _is_author_note_trigger(stripped):
                 in_block = True
             else:
                 result.append(line)
