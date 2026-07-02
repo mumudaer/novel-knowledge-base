@@ -2594,3 +2594,70 @@ def query_causal_chain(
             "chain": chain,
         },
     }
+
+
+# ===================== 去AI味判据库 =====================
+
+_anti_ai_cache = None
+
+
+@router.get("/anti-ai-patterns")
+def get_anti_ai_patterns():
+    """
+    获取去AI味判据库
+
+    返回：
+    - banned_words: AI高频词汇 + 替换建议
+    - banned_patterns: AI味句式模板 + 替代表达
+    - style_guidelines: 标杆文风参考方向
+    """
+    global _anti_ai_cache
+    if _anti_ai_cache is None:
+        import os
+        data_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "data",
+            "anti_ai_patterns.json",
+        )
+        try:
+            with open(data_path, "r", encoding="utf-8") as f:
+                _anti_ai_cache = json.load(f)
+        except FileNotFoundError:
+            return {"success": False, "error": "anti_ai_patterns.json 未找到"}
+
+    return {"success": True, "data": _anti_ai_cache}
+
+
+# ===================== 题材裁决规则 =====================
+
+
+@router.get("/genre-rules/{genre}")
+def get_genre_rules(
+    genre: str,
+    limit: int = Query(20, ge=1, le=100),
+):
+    """
+    获取指定题材的技法优先级排名
+
+    返回该题材下所有技法按频率排序的排名，
+    供创作 Skill 查询“玄幻题材哪些技法最重要”等问题。
+    """
+    db = get_db_manager()
+    cursor = db.connect().cursor()
+    cursor.execute(
+        "SELECT technique_name, frequency, priority_rank, applicable_scenarios, benchmark_books "
+        "FROM genre_rules WHERE genre = ? ORDER BY priority_rank LIMIT ?",
+        (genre, limit),
+    )
+    rows = cursor.fetchall()
+    columns = ["technique_name", "frequency", "priority_rank", "applicable_scenarios", "benchmark_books"]
+    rules = [dict(zip(columns, row)) for row in rows]
+
+    return {
+        "success": True,
+        "data": {
+            "genre": genre,
+            "total_rules": len(rules),
+            "rules": rules,
+        },
+    }

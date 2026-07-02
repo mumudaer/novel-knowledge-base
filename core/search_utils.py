@@ -19,7 +19,7 @@ ALLOWED_TABLES = {
     # Stage C
     "author_fingerprints", "sensory_mappings",
     # Stage D
-    "world_settings", "character_profiles", "world_timeline",
+    "world_settings", "character_profiles", "world_timeline", "golden_finger",
     "faction_networks", "setting_evolutions",
     # Stage E
     "macro_outlines", "plot_foreshadowing", "entity_state_tracker", "chapter_functions",
@@ -45,6 +45,8 @@ ALLOWED_TABLES = {
     "book_metadata", "chapter_reviews", "kb_references", "search_logs", "quality_checks",
     # Stage O: 事件因果图谱
     "story_events", "event_causal_edges",
+    # 后处理聚合
+    "genre_rules",
 }
 
 # 字段名白名单，防止 SQL 注入（仅允许字母、数字、下划线）

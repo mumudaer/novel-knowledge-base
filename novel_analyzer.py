@@ -191,38 +191,47 @@ def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
 
 
 def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
-    """扫描小说库目录"""
+    """
+    扫描小说库目录
+    支持文件名格式：《书名》作者：作者名 分类：分类 标签：标签1、标签2
+    兼容旧格式：从目录结构提取分类
+    """
     print(f"正在扫描小说库：{root_dir}")
     all_txt = glob.glob(os.path.join(root_dir, "**", "*.txt"), recursive=True)
 
     book_list = []
     for path in all_txt:
-        rel_path = os.path.relpath(path, root_dir)
-        parts = rel_path.split(os.sep)
-
-        # 提取分类
-        if len(parts) >= 3:
-            category = parts[1]
-            category = (
-                re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
-            )
-        elif len(parts) == 2:
-            category = parts[0]
-        else:
-            category = "未分类"
-
         raw_file_name = os.path.splitext(os.path.basename(path))[0]
         pure_book_name, suffix = clean_book_name(raw_file_name)
 
-        # 提取作者名
+        # 提取作者名（到“分类”或“标签”为止）
         author_match = re.search(
-            r"作者[：:]\s*([^\[\/]+)|by\s+([^\[\/]+)", raw_file_name, re.IGNORECASE
+            r"作者[：:]\s*(.+?)(?=\s*分类[：:]|\s*标签[：:]|\s*$)",
+            raw_file_name,
         )
-        author_name = (
-            (author_match.group(1) or author_match.group(2)).strip()
-            if author_match
-            else "未知作者"
-        )
+        if not author_match:
+            author_match = re.search(r"by\s+(.+?)(?=\s*分类[：:]|\s*标签[：:]|\s*$)", raw_file_name, re.IGNORECASE)
+        author_name = author_match.group(1).strip() if author_match else "未知作者"
+
+        # 提取分类（优先从文件名，降级到目录结构）
+        category_match = re.search(r"分类[：:]\s*(.+?)(?=\s*标签[：:]|\s*$)", raw_file_name)
+        if category_match:
+            category = category_match.group(1).strip()
+        else:
+            # 降级：从目录结构提取
+            rel_path = os.path.relpath(path, root_dir)
+            parts = rel_path.split(os.sep)
+            if len(parts) >= 3:
+                category = parts[1]
+                category = re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+            elif len(parts) == 2:
+                category = parts[0]
+            else:
+                category = "未分类"
+
+        # 提取标签
+        tags_match = re.search(r"标签[：:]\s*(.+?)$", raw_file_name)
+        tags = [t.strip() for t in tags_match.group(1).split("、") if t.strip()] if tags_match else []
 
         db_book_name = f"{pure_book_name}{suffix}" if suffix else pure_book_name
 
@@ -232,6 +241,7 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
                 "pure_name": pure_book_name,
                 "author": author_name,
                 "category": category,
+                "tags": tags,
                 "all_files": [path],
             }
         )
@@ -595,27 +605,73 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
 
     book_name = book_info["book_name"]
     author = book_info.get("author", "未知作者")
-    category = book_info["category"]
+    category = book_info.get("category", "未分类")
+    filename_tags = book_info.get("tags", [])
 
     # 合并文件
     merge_path = os.path.join(BASE_DIR, f"temp_{book_name}.txt")
     text_path = merge_txt_files(book_info["all_files"], merge_path)
 
     try:
-        # 读取文本（编码自适应链：utf-8 → gbk → utf-16 → latin-1）
+        # 读取文本（编码自适应：charset-normalizer + BOM 快路径 + 多编码降级）
+        with open(text_path, "rb") as f:
+            raw_bytes = f.read()
+
         raw_text = ""
-        for encoding in ("utf-8", "gbk", "utf-16"):
+        detected_encoding = None
+
+        # 快路径：根据 BOM 字节头直接判断
+        if raw_bytes[:3] == b"\xef\xbb\xbf":
+            raw_text = raw_bytes[3:].decode("utf-8", errors="replace")
+            detected_encoding = "utf-8-sig"
+        elif raw_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            raw_text = raw_bytes.decode("utf-16", errors="replace")
+            detected_encoding = "utf-16"
+        else:
+            # 无 BOM：用 charset-normalizer 智能检测编码
             try:
-                with open(text_path, "r", encoding=encoding) as f:
-                    raw_text = f.read()
-                break
-            except UnicodeDecodeError:
-                continue
+                from charset_normalizer import from_bytes
+                detection = from_bytes(raw_bytes)
+                best = detection.best()
+                if best is not None:
+                    raw_text = str(best)
+                    detected_encoding = best.encoding
+                    logger.info(
+                        f"《{book_name}》 charset-normalizer 检测编码: {detected_encoding} "
+                        f"(置信度: {best.language or 'N/A'}, {len(raw_bytes)} 字节)"
+                    )
+            except ImportError:
+                logger.warning("charset-normalizer 未安装，使用降级编码检测（pip install charset-normalizer）")
+            except Exception as e:
+                logger.warning(f"charset-normalizer 检测失败: {e}，使用降级编码检测")
+
+            # charset-normalizer 失败或未安装：多编码降级尝试
+            if not raw_text:
+                for encoding in ("utf-8", "gbk", "gb2312", "utf-16-le", "big5"):
+                    try:
+                        candidate = raw_bytes.decode(encoding)
+                        replacement_count = candidate.count("\ufffd")
+                        control_chars = sum(
+                            1 for ch in candidate[:5000]
+                            if ord(ch) < 32 and ch not in ("\n", "\r", "\t")
+                        )
+                        if replacement_count > 10 or control_chars > 50:
+                            continue
+                        raw_text = candidate
+                        detected_encoding = encoding
+                        break
+                    except (UnicodeDecodeError, ValueError):
+                        continue
+
         if not raw_text:
-            # 最后手段：latin-1 不会抛异常但可能产生乱码
-            with open(text_path, "rb") as f:
-                raw_text = f.read().decode("latin-1", errors="ignore")
-            logger.warning(f"\u300a{book_name}\u300b 所有常见编码均失败，使用 latin-1 降级读取（可能有乱码）")
+            raw_text = raw_bytes.decode("latin-1", errors="ignore")
+            detected_encoding = "latin-1"
+            logger.warning(f"《{book_name}》 所有编码均失败，使用 latin-1 降级读取（可能有乱码）")
+        elif detected_encoding and detected_encoding != "latin-1":
+            logger.info(f"《{book_name}》 检测编码: {detected_encoding} ({len(raw_bytes)} 字节)")
+
+        # 清理 BOM 残留和零宽字符
+        raw_text = raw_text.lstrip("\ufeff").replace("\ufeff", "")
 
         # 清洗并切分章节
         raw_text = clean_novel_text(raw_text)
@@ -627,11 +683,15 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
         total_chapters = len(chapters)
         total_words = len(raw_text)
 
-        # 生成类型标签并写入元数据
-        genre_tags = ""
-        try:
-            sample_text = raw_text[:2000] if len(raw_text) > 2000 else raw_text
-            tag_prompt = f"""根据以下小说信息，生成5-8个类型标签（用逗号分隔）。
+        # 生成类型标签：优先使用文件名中的标签，降级到 LLM 生成
+        if filename_tags:
+            genre_tags = ",".join(filename_tags)
+            logger.info(f"使用文件名标签: {genre_tags}")
+        else:
+            genre_tags = ""
+            try:
+                sample_text = raw_text[:2000] if len(raw_text) > 2000 else raw_text
+                tag_prompt = f"""根据以下小说信息，生成5-8个类型标签（用逗号分隔）。
 
 书名：{book_name}
 作者：{author}
@@ -643,13 +703,13 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
 {{"tags": "标签1,标签2,标签3,..."}}
 (要求：标签应包含题材类型、风格特点、目标读者等维度，如：玄幻,升级流,热血,男频)"""
 
-            tag_resp = ollama_chat(tag_prompt, 0.3, "A")
-            tag_data = safe_parse_json(tag_resp)
-            if tag_data and "tags" in tag_data:
-                genre_tags = tag_data["tags"]
-        except Exception as e:
-            logger.warning(f"生成类型标签失败: {e}")
-            genre_tags = category
+                tag_resp = ollama_chat(tag_prompt, 0.3, "A")
+                tag_data = safe_parse_json(tag_resp)
+                if tag_data and "tags" in tag_data:
+                    genre_tags = tag_data["tags"]
+            except Exception as e:
+                logger.warning(f"生成类型标签失败: {e}")
+                genre_tags = category
 
         # 写入 book_metadata 表
         db = get_db_manager()

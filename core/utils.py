@@ -72,20 +72,53 @@ _NOISE_PATTERNS = [re.compile(p, re.MULTILINE | re.IGNORECASE) for p in [
     r"^[\s ]*(作者的话|作者说|题外话|碎碎念)[：:].*?$",
     r"^[\s ]*(本章未完|点击下一页继续阅读|最新网址|手机阅读).*?$",
 ]]
-_AUTHOR_NOTE_BLOCK_RE = re.compile(
-    r"(?:作者的话|PS|ps)[：:\s]*\n[\s\S]*?(?=(?:第[零一二三四五六七八九十百千万两\d]+[章节回])|$)",
-    re.IGNORECASE,
-)
+_AUTHOR_NOTE_BLOCK_RE = None  # 不再用正则（O(n²) 问题），改用线性扫描函数
 _GARBLED_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 _MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 _MULTI_SPACE_RE = re.compile(r"[ \t]+")
 
-# smart_split_chapters 预编译正则
-_CHAPTER_PATTERNS = [
-    re.compile(r"^第[一二三四五六七八九十百千万零\d]+[章节回卷集部篇]\s*.*$", re.IGNORECASE),
-    re.compile(r"^Chapter\s*\d+.*$", re.IGNORECASE),
-    re.compile(r"^\d+[\.\s].*$", re.IGNORECASE),
-]
+# 章节标题强特征正则（全文搜索，兼容各种格式）
+# 匹配: 第X章/回/节/卷/集/部/篇 + 可选标题, Chapter N
+_STRONG_CHAPTER_RE = re.compile(
+    r"(?:^|\n+)\s*"
+    r"("
+    r"(?:第[零一二三四五六七八九十百千万两\d\-]+[章节回卷集部篇][^\n]{0,30})"
+    r"|(?:[Cc]hapter\s*\d+[^\n]{0,30})"
+    r")"
+    r"\s*(?:\n+|$)",
+)
+
+# 作者的话块状区域检测关键词
+_AUTHOR_NOTE_TRIGGERS = ("作者的话", "作者说", "PS", "ps", "Ps")
+_CHAPTER_HEADER_RE = re.compile(r"^第[零一二三四五六七八九十百千万两\d]+[章节回]")
+
+
+def _remove_author_note_blocks(text: str) -> str:
+    """
+    剔除“作者的话”/PS 块状区域（线性扫描 O(n)）
+    从触发关键词开始，到下一个章节标题为止，整块删除。
+    """
+    lines = text.split("\n")
+    result = []
+    in_block = False
+
+    for line in lines:
+        stripped = line.strip()
+        if in_block:
+            # 检查是否到达下一个章节标题
+            if _CHAPTER_HEADER_RE.match(stripped):
+                in_block = False
+                result.append(line)
+            # 否则跳过该行
+        else:
+            # 检查是否触发作者话块
+            if any(trigger in stripped for trigger in _AUTHOR_NOTE_TRIGGERS):
+                in_block = True
+            else:
+                result.append(line)
+
+    return "\n".join(result)
+
 
 def clean_novel_text(text: str) -> str:
     """网文专属文本清洗引擎：剔除广告、防盗章节、作者废话，提纯正文"""
@@ -106,8 +139,8 @@ def clean_novel_text(text: str) -> str:
     for pattern in _NOISE_PATTERNS:
         text = pattern.sub("", text)
 
-    # 5. 剔除“作者的话”块状区域
-    text = _AUTHOR_NOTE_BLOCK_RE.sub("", text)
+    # 5. 剔除“作者的话”块状区域（线性扫描，避免正则 O(n²) 问题）
+    text = _remove_author_note_blocks(text)
 
     # 6. 移除乱码字符
     text = _GARBLED_CHARS_RE.sub("", text)
@@ -186,66 +219,68 @@ def smart_split_chapters(
     overlap: int = SPLIT_OVERLAP,
 ) -> List[Dict[str, Any]]:
     """
-    智能切分章节
-    1. 优先按章节标题切分
-    2. 对过长章节进行二次切分，支持语义边界感知和滑动窗口重叠
-    3. 对无章节标题的长文，按滑动窗口切分
-    4. 字数守恒检查：丢失率 > 5% 时记录警告
+    章节切分引擎（适配各种格式）
+    策略：能识别章节标题就切，识别不了就按固定大小切。
+    标题不重要，内容才重要。
     """
-    # 记录原始字数（去除空白）用于丢失率检测
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     original_length = len(text.replace("\n", "").replace(" ", ""))
 
-    lines = text.split("\n")
+    # === 第一步：用 re.split 在全文中搜索章节标记 ===
+    parts = _STRONG_CHAPTER_RE.split(text)
+
     chapters = []
-    current_chapter = {"id": "序章", "text": "", "book_name": book_name}
-    chapter_index = 0
+    # parts[0] 是第一个章节标题之前的内容（序言/前言）
+    if parts[0].strip() and len(parts[0].strip()) > 100:
+        chapters.append({
+            "id": "序章",
+            "text": parts[0].strip(),
+            "book_name": book_name,
+        })
 
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # 检查是否是章节标题（使用预编译正则）
-        is_chapter_title = False
-        for pattern in _CHAPTER_PATTERNS:
-            if pattern.match(line):
-                is_chapter_title = True
-                break
-
-        if is_chapter_title and current_chapter["text"].strip():
-            # 保存当前章节
-            if len(current_chapter["text"]) > 100:  # 过滤过短的章节
-                chapters.append(current_chapter)
-                chapter_index += 1
-
-            # 开始新章节
-            current_chapter = {
-                "id": f"第{chapter_index + 1}章",
-                "text": "",
+    # parts[1::2] 是章节标题，parts[2::2] 是对应内容
+    for i in range(1, len(parts), 2):
+        title = parts[i].strip()
+        content = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        if content and len(content) > 100:
+            chapters.append({
+                "id": title if title else f"第{len(chapters) + 1}章",
+                "text": content,
                 "book_name": book_name,
-            }
+            })
 
-        current_chapter["text"] += line + "\n"
+    # === 第二步：如果没识别到章节或太少，退化为固定大小切分 ===
+    if len(chapters) <= 1 and len(text) > max_chunk:
+        chapters = []
+        pos = 0
+        idx = 1
+        while pos < len(text):
+            chunk = text[pos:pos + max_chunk].strip()
+            if chunk and len(chunk) > 50:
+                chapters.append({
+                    "id": f"分块_{idx}",
+                    "text": chunk,
+                    "book_name": book_name,
+                })
+                idx += 1
+            pos += max_chunk
+        logger.info(
+            f"《{book_name}》 未识别到章节标题，全文按 {max_chunk} 字符切分为 {len(chapters)} 块"
+        )
 
-    # 保存最后一章
-    if current_chapter["text"].strip() and len(current_chapter["text"]) > 100:
-        chapters.append(current_chapter)
-
-    # 二次切分过长的章节（语义边界感知 + 滑动窗口重叠）
+    # === 第三步：对过长章节进行二次切分（语义边界 + 滑动窗口） ===
     final_chapters = []
     for chap in chapters:
         if len(chap["text"]) > max_chunk * 2:
-            # 使用语义边界感知切分
             text_content = chap["text"]
             pos = 0
             sub_index = 1
 
             while pos < len(text_content):
-                # 寻找语义边界
                 cut_pos = _find_semantic_boundary(text_content, pos, max_chunk)
 
                 chunk_text = text_content[pos:cut_pos].strip()
-                if chunk_text and len(chunk_text) > 50:  # 过滤过短的片段
+                if chunk_text and len(chunk_text) > 50:
                     final_chapters.append({
                         "id": f"{chap['id']}_{sub_index}",
                         "text": chunk_text,
@@ -253,29 +288,23 @@ def smart_split_chapters(
                     })
                     sub_index += 1
 
-                # 如果已经切到文本末尾，结束循环
                 if cut_pos >= len(text_content):
                     break
 
-                # 滑动窗口：下一个块的起点回退 overlap 字符
                 pos = cut_pos
                 if overlap > 0:
                     new_pos = max(pos - overlap, 0)
-                    # 防止死循环：确保每轮至少前进 1 个字符
                     if new_pos <= pos - max_chunk:
-                        pos = cut_pos  # 回退太多，不回退
+                        pos = cut_pos
                     else:
                         pos = new_pos
-
         else:
             final_chapters.append(chap)
 
-    # 字数守恒检查：丢失率 > 5% 时记录警告（不阻断程序）
+    # === 第四步：字数守恒检查 ===
     if original_length > 0 and final_chapters:
         split_text_combined = "".join(ch["text"] for ch in final_chapters)
         split_length = len(split_text_combined.replace("\n", "").replace(" ", ""))
-        # 扣除滑动窗口重叠导致的重复字数，避免重叠掩盖真实丢失
-        # 只匹配 smart_split_chapters 生成的二次切片 ID（格式: "第X章_N"）
         _slice_suffix_re = re.compile(r"_\d+$")
         total_overlap = sum(
             overlap for ch in final_chapters
@@ -289,6 +318,7 @@ def smart_split_chapters(
                 f"(原始: {original_length}字, 切分后: {split_length}字, 重叠: {total_overlap}字)"
             )
 
+    logger.info(f"《{book_name}》 切分结果: {len(final_chapters)} 个章节/块")
     return final_chapters
 
 

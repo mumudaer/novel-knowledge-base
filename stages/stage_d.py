@@ -69,9 +69,9 @@ class StageD(BaseStage):
 
     def _extract_world_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """提取世界观组：world_settings + world_timeline + faction_networks"""
-        result = {"world_settings": [], "world_timeline": [], "faction_networks": []}
+        result = {"world_settings": [], "world_timeline": [], "faction_networks": [], "golden_finger": None}
 
-        prompt = f"""你是顶级的文学世界观架构师。请根据本书的实际题材，从以下章节文本中提取【世界观设定（7维度）】、【历史编年史】和【势力关系网络】。
+        prompt = f"""你是顶级的文学世界观架构师。请根据本书的实际题材，从以下章节文本中提取【世界观设定（7维度+金手指体系）】、【历史编年史】和【势力关系网络】。
 
 【书名】{self.book_name} 【作者】{self.author} 【分类】{self.category}
 【章节】{chap_id}
@@ -82,7 +82,7 @@ class StageD(BaseStage):
 {{
   "world_settings": [
     {{
-      "module": "设定模块(自适应题材)",
+      "module": "设定模块(自适应题材，如力量体系/社会结构/地理空间/政治格局/经济体系/文化符号/规则体系)",
       "entity": "具体实体名",
       "content": "详细规则、空间分布、核心限制/代价/底层冲突(100-300字)",
       "tags": ["标签1", "标签2"],
@@ -96,6 +96,15 @@ class StageD(BaseStage):
       "rules_exceptions": "规则例外与代价(50字内)"
     }}
   ],
+  "golden_finger": {{
+    "name": "金手指名称(如主角有特殊能力/系统/传承，提取其名称；无则留空)",
+    "type": "类型(系统/传承/血脉/异能/知识差/经营/空间/契约/无)",
+    "abilities": ["能力1", "能力2"],
+    "upgrade_path": "升级路径简述(如何变强/解锁新能力，50字内；无则留空)",
+    "limitations": ["限制1(如冷却时间/次数限制/代价)", "限制2"],
+    "cost_layers": ["身体代价/精神代价/社交代价/外部代价(无则留空)"],
+    "interaction_with_plot": "与剧情的交互方式(金手指如何推动/制约剧情发展，50字内；无则留空)"
+  }},
   "world_timeline": [
     {{
       "era_or_year": "纪元或年份",
@@ -172,6 +181,21 @@ class StageD(BaseStage):
                                 "key_events": fn.get("key_events", ""),
                             }
                         )
+
+                # 金手指提取（只保留第一个有效结果）
+                gf = data.get("golden_finger", {})
+                if isinstance(gf, dict) and gf.get("name") and gf.get("type") != "无":
+                    result["golden_finger"] = {
+                        "book_name": self.book_name,
+                        "name": gf.get("name", ""),
+                        "type": gf.get("type", ""),
+                        "abilities": gf.get("abilities", []),
+                        "upgrade_path": gf.get("upgrade_path", ""),
+                        "limitations": gf.get("limitations", []),
+                        "cost_layers": gf.get("cost_layers", []),
+                        "interaction_with_plot": gf.get("interaction_with_plot", ""),
+                        "source_chapter": chap_id,
+                    }
         except Exception as e:
             logger.warning(f"⚠️ [阶段D-世界观] 解析章节 {chap_id} 失败: {e}")
             if stage_result:
@@ -222,7 +246,9 @@ class StageD(BaseStage):
       "decision_pattern": "决策模式(冲动型/理性分析型/从众型/直觉型，50字内)",
       "cognitive_bias": "认知偏差(对世界/他人的错误认知、偏见，50字内)",
       "transformation_trigger": "转变触发器(什么事件触发了人物转变，50字内)",
-      "contrast_design": "对比设计(与同类型角色的差异设计，50字内)"
+      "contrast_design": "对比设计(与同类型角色的差异设计，50字内)",
+      "archetype_label": "角色原型标签(如:守护驱动型主角/代价成长型主角/秩序洁癖型反派/镜像型大反派/韧性反击型女主/团宠守护者/情报源配角/牺牲品配角，30字内)",
+      "writing_anti_patterns": "忌讳写法/毒点(这类角色容易写崩的地方，如:动机弱化/智谋降维/情感套路化，50字内)"
     }}
   ]
 }}
@@ -274,6 +300,8 @@ class StageD(BaseStage):
                                     "transformation_trigger", ""
                                 ),
                                 "contrast_design": cp.get("contrast_design", ""),
+                                "archetype_label": cp.get("archetype_label", ""),
+                                "writing_anti_patterns": cp.get("writing_anti_patterns", ""),
                             }
                         )
         except Exception as e:
@@ -295,6 +323,7 @@ class StageD(BaseStage):
             "character_profiles": [],
             "world_timeline": [],
             "faction_networks": [],
+            "golden_finger": None,
         }
 
         # 批次1：世界观 + 编年史 + 势力网络
@@ -302,6 +331,7 @@ class StageD(BaseStage):
         chapter_result["world_settings"] = world_data["world_settings"]
         chapter_result["world_timeline"] = world_data["world_timeline"]
         chapter_result["faction_networks"] = world_data["faction_networks"]
+        chapter_result["golden_finger"] = world_data.get("golden_finger")
 
         # 批次2：人物深度档案
         char_data = self._extract_character_group(text, chap_id)
@@ -324,6 +354,7 @@ class StageD(BaseStage):
 
         DATA_KEYS = ["world_settings", "character_profiles", "world_timeline", "faction_networks"]
         result = {key: [] for key in DATA_KEYS}
+        result["golden_finger"] = None  # 单独处理，不是 list
 
         # 智能采样
         sampled_chapters = self._select_sample_chapters(chapters)
@@ -336,6 +367,9 @@ class StageD(BaseStage):
         for item in completed_items:
             for key in DATA_KEYS:
                 result[key].extend(item.get(key, []))
+            # golden_finger 单独处理（dict 类型，不用 extend）
+            if not result["golden_finger"] and item.get("golden_finger"):
+                result["golden_finger"] = item["golden_finger"]
 
         if completed_ids:
             logger.info(f"✅ [阶段D] 恢复断点：已完成 {len(completed_ids)}/{len(sampled_chapters)} 章")
@@ -362,6 +396,9 @@ class StageD(BaseStage):
                             completed_items.append(chapter_result)
                             for key in DATA_KEYS:
                                 result[key].extend(chapter_result.get(key, []))
+                            # golden_finger 单独处理（只保留第一个有效结果）
+                            if not result["golden_finger"] and chapter_result.get("golden_finger"):
+                                result["golden_finger"] = chapter_result["golden_finger"]
                             processed_count += 1
                             if processed_count % 5 == 0:
                                 self.save_cache({"data": completed_items})
@@ -398,6 +435,7 @@ class StageD(BaseStage):
         cursor = self.db.connect().cursor()
         stats = {
             "world_settings": 0,
+            "golden_finger": 0,
             "character_profiles": 0,
             "world_timeline": 0,
             "faction_networks": 0,
@@ -456,11 +494,27 @@ class StageD(BaseStage):
             ],
         )
 
+        # 金手指入库
+        gf = results.get("golden_finger")
+        if gf and isinstance(gf, dict) and gf.get("name"):
+            gf_id = generate_id(gf["book_name"], "golden_finger", gf["name"])
+            cursor.execute(
+                "INSERT OR REPLACE INTO golden_finger VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (gf_id, gf["book_name"], gf["name"], gf.get("type", ""),
+                 json.dumps(gf.get("abilities", []), ensure_ascii=False),
+                 gf.get("upgrade_path", ""),
+                 json.dumps(gf.get("limitations", []), ensure_ascii=False),
+                 json.dumps(gf.get("cost_layers", []), ensure_ascii=False),
+                 gf.get("interaction_with_plot", ""),
+                 gf.get("source_chapter", "")),
+            )
+            stats["golden_finger"] = 1
+
         # 人物档案入库（33个字段）
         for cp in results.get("character_profiles", []):
             cp_id = generate_id(cp["book_name"], cp["name"], "profile")
             cursor.execute(
-                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     cp_id,
                     cp["book_name"],
@@ -495,6 +549,8 @@ class StageD(BaseStage):
                     cp.get("cognitive_bias", ""),
                     cp.get("transformation_trigger", ""),
                     cp.get("contrast_design", ""),
+                    cp.get("archetype_label", ""),
+                    cp.get("writing_anti_patterns", ""),
                 ),
             )
             stats["character_profiles"] += 1

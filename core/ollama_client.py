@@ -176,6 +176,22 @@ class OllamaClient:
         num_ctx = config["num_ctx"]
         num_predict = config.get("num_predict", 2048)  # 从 Stage 配置读取，默认 2048
 
+        # Prompt 长度检查：防止 Ollama 静默截断导致指令丢失
+        # 粗略估算 token 数：中文字符 ≈ 1.5 token，ASCII ≈ 0.25 token
+        safe_token_limit = num_ctx - num_predict - 500  # 预留 500 token 缓冲
+        estimated_tokens = sum(
+            1.5 if ord(ch) > 127 else 0.25 for ch in prompt
+        )
+        if estimated_tokens > safe_token_limit:
+            # 从末尾截断，保留指令部分（通常在 prompt 开头）
+            max_chars = int(safe_token_limit / 1.0)  # 偏保守地按 1 token/字符
+            original_len = len(prompt)
+            prompt = prompt[:max_chars] + f"\n...(内容已截断，原始长度: {original_len}字)"
+            logger.warning(
+                f"⚠️ [Stage {stage}] Prompt 过长（估算 {int(estimated_tokens)} token，"
+                f"上限 {safe_token_limit} token），已截断至 {max_chars} 字符"
+            )
+
         # 显存分时复用：确保当前模型已加载，必要时卸载旧模型
         vram = get_vram_manager()
         vram.ensure_model_loaded(model)

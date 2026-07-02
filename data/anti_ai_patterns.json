@@ -1,0 +1,52 @@
+{
+  "description": "去AI味判据库：高频AI味表达 + 禁用句式 + 标杆替代表达参考",
+  "version": "1.0",
+  "banned_words": {
+    "description": "AI高频词汇，创作时应避免或替换",
+    "items": [
+      {"word": "不禁", "reason": "AI过度使用的身体反应词", "replace_hint": "用具体动作替代"},
+      {"word": "缓缓", "reason": "AI最爱的动作修饰词", "replace_hint": "用具体速度描写或直接省略"},
+      {"word": "淡淡", "reason": "AI万能情绪淡化词", "replace_hint": "用具体表情/语气替代"},
+      {"word": "微微", "reason": "AI高频程度副词", "replace_hint": "要么删掉，要么用具体描写"},
+      {"word": "目光", "reason": "AI过度聚焦眼部描写", "replace_hint": "分散到全身动作"},
+      {"word": "嘴角上扬", "reason": "AI标准微笑描写", "replace_hint": "用对话/行为替代"},
+      {"word": "深邃", "reason": "AI万能形容词", "replace_hint": "用具体特征描写"},
+      {"word": "仿佛", "reason": "AI过度使用比喻过渡", "replace_hint": "减少使用频率，直接描写"},
+      {"word": "下意识", "reason": "AI解释角色行为的高频词", "replace_hint": "直接写动作，不需要解释"},
+      {"word": "一股", "reason": "AI量化感受的万能词", "replace_hint": "用具体感受描写"},
+      {"word": "竟然", "reason": "AI制造惊讶的廉价手段", "replace_hint": "通过行为反应展现惊讶"},
+      {"word": "居然", "reason": "同'竟然'", "replace_hint": "同上"},
+      {"word": "此刻", "reason": "AI时间标记滥用", "replace_hint": "用场景描写暗示时间"},
+      {"word": "心中暗道", "reason": "AI内心独白的偷懒写法", "replace_hint": "用行为暗示或省略"},
+      {"word": "不由自主", "reason": "AI解释身体反应", "replace_hint": "直接写反应"},
+      {"word": "映入眼帘", "reason": "AI视觉描写套话", "replace_hint": "直接写看到的内容"},
+      {"word": "不由自主地", "reason": "同'不由自主'", "replace_hint": "同上"},
+      {"word": "嘴角微扬", "reason": "同'嘴角上扬'", "replace_hint": "同上"},
+      {"word": "眼中闪过", "reason": "AI眼部描写套路", "replace_hint": "用行为暗示情绪"},
+      {"word": "心中一动", "reason": "AI内心活动套话", "replace_hint": "用具体想法替代"}
+    ]
+  },
+  "banned_patterns": {
+    "description": "AI味句式模板，创作时应避免",
+    "items": [
+      {"pattern": "他/她[动作]，[身体部位]中[情绪动词]着[情绪]", "example": "他转头，眼中闪烁着愤怒", "reason": "AI标准情绪描写公式", "replace_hint": "用行为链替代：他攥紧拳头，指甲嵌进掌心"},
+      {"pattern": "仿佛[比喻]一般", "example": "仿佛利剑一般刺穿了他的心", "reason": "AI比喻公式过于刻板", "replace_hint": "用更自然的比喻或直接描写感受"},
+      {"pattern": "[角色]的[身体部位]不自觉地[动作]", "example": "她的手不自觉地握紧了", "reason": "AI解释无意识行为", "replace_hint": "直接写动作：她握紧了手中的杯子"},
+      {"pattern": "空气中弥漫着[抽象名词]", "example": "空气中弥漫着紧张的气氛", "reason": "AI氛围描写套路", "replace_hint": "用具体感官描写：房间里没人说话，只剩钟摆滴答作响"},
+      {"pattern": "他的声音[形容词]而[形容词]", "example": "他的声音低沉而沙哑", "reason": "AI声音描写公式", "replace_hint": "通过对话内容和节奏暗示声音特质"},
+      {"pattern": "[时间]，[地点]，[角色][情绪状态]", "example": "夜幕降临，废墟中，他孤独地站着", "reason": "AI场景描写三段式", "replace_hint": "打破公式，用角色感知驱动场景描写"}
+    ]
+  },
+  "style_guidelines": {
+    "description": "标杆作品的文风参考方向（从Stage C数据中提炼）",
+    "items": [
+      "多用动词驱动叙事，少用形容词堆砌",
+      "对话要有潜台词，不要直白说出情绪",
+      "场景描写服务于角色心理，不要独立存在",
+      "避免解释角色动机，让行为暗示动机",
+      "节奏变化通过句子长短实现，不通过副词",
+      "感官描写至少覆盖2种以上（视/听/触/嗅/味）",
+      "内心独白要克制，用行动替代心理描写"
+    ]
+  }
+}

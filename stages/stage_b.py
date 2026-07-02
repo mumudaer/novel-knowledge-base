@@ -25,7 +25,7 @@ def process_single_chapter_b(
 【正文】{text}
 输出JSON：{{
   "scene_type": "场景类型(根据{category}分类自适应，如：冲突/日常/高潮/铺垫/转折/揭秘/情感/动作等)", 
-  "narrative_skills": [{{"skill_name": "", "original_example": "", "analysis": "", "reuse_scenario": ""}}],
+  "narrative_skills": [{{"skill_name": "", "original_example": "", "analysis": "", "reuse_scenario": "", "anti_pattern": "这种技法的常见误区/反例写法(30字内，无则留空)"}}],
   "climax_point": {{"has_climax_point": false, "type": "高潮/张力点类型(如：情感爆发/悬念释放/冲突升级/真相揭露/逆转)", "quote": "", "buildup_method": "构建方式(如:先抑后扬/信息差制造/能力展示/反转打脸/情感铺垫，50字内)"}}, 
   "style_feature": {{
     "tone": "文风调性",
@@ -161,7 +161,7 @@ class StageB(BaseStage):
                 )
                 tags = f"{res.get('scene_type', '')}|{skill.get('skill_name', '')}"
                 cursor.execute(
-                    "INSERT OR REPLACE INTO skills VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO skills VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
                         skill_id,
                         res["book_name"],
@@ -172,6 +172,7 @@ class StageB(BaseStage):
                         skill.get("analysis", ""),
                         skill.get("original_example", ""),
                         tags,
+                        skill.get("anti_pattern", ""),
                     ),
                 )
                 stats["skills_db"] += 1
@@ -186,6 +187,7 @@ class StageB(BaseStage):
                     s_docs.append(
                         f"技法:{skill.get('skill_name', '')}\n分析:{skill.get('analysis', '')}\n"
                         f"原文:{skill.get('original_example', '')}\n复用场景:{skill.get('reuse_scenario', '')}"
+                        + (f"\n常见误区:{skill.get('anti_pattern', '')}" if skill.get('anti_pattern') else "")
                     )
                     s_metas.append({
                         "book_name": res["book_name"],

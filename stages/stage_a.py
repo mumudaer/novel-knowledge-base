@@ -60,6 +60,9 @@ class StageA(BaseStage):
                 for i, item in enumerate(cached_data):
                     chapters[i]["summary"] = item.get("summary", "")
                     chapters[i]["character_state"] = item.get("character_state", {})
+                    chapters[i]["information_flow"] = item.get("information_flow", {})
+                    chapters[i]["emotion_arc"] = item.get("emotion_arc", "")
+                    chapters[i]["time_progression"] = item.get("time_progression", "")
                     processed_chaps.append(chapters[i])
                 finish_count = len(cached_data)
                 last_char_state = processed_chaps[-1]["character_state"]
@@ -87,6 +90,9 @@ class StageA(BaseStage):
                         for i, item in enumerate(w_data):
                             chapters[offset + i]["summary"] = item["summary"]
                             chapters[offset + i]["character_state"] = item["character_state"]
+                            chapters[offset + i]["information_flow"] = item.get("information_flow", {})
+                            chapters[offset + i]["emotion_arc"] = item.get("emotion_arc", "")
+                            chapters[offset + i]["time_progression"] = item.get("time_progression", "")
                             processed_chaps.append(chapters[offset + i])
                         finish_count = offset + len(w_data)
                         last_char_state = processed_chaps[-1]["character_state"]
@@ -138,7 +144,13 @@ class StageA(BaseStage):
   "scene_transitions": {{
     "count": 场景切换次数(数字),
     "methods": ["切换方式1(如:时间跳跃/空间切换/视角转换)", "切换方式2"]
-  }},{category_prompt}
+  }},
+  "information_flow": {{
+    "new_info": ["本章新揭示的信息(谁知道什么新东西，30字内)"],
+    "hidden_info": ["读者知道但角色不知道的信息(30字内)"]
+  }},
+  "emotion_arc": "本章主要情绪走向(如:平静→紧张→爆发→余韵，20字内)",
+  "time_progression": "本章时间推进(如:过了三天/同一天晚上/时间未明确，20字内)",{category_prompt}
 }}"""
             try:
                 resp = ollama_chat(prompt, 0.1, "A")
@@ -152,6 +164,9 @@ class StageA(BaseStage):
                 chap["summary"] = data.get("chapter_summary", "")
                 chap["key_events"] = data.get("key_events", [])
                 chap["scene_transitions"] = data.get("scene_transitions", {})
+                chap["information_flow"] = data.get("information_flow", {})
+                chap["emotion_arc"] = data.get("emotion_arc", "")
+                chap["time_progression"] = data.get("time_progression", "")
                 consecutive_fails = 0
 
                 if finish_count + idx == 0 or (idx == 0 and not protagonist_names):
@@ -166,6 +181,9 @@ class StageA(BaseStage):
                 chap["summary"] = "处理失败"
                 chap["key_events"] = []
                 chap["scene_transitions"] = {}
+                chap["information_flow"] = {}
+                chap["emotion_arc"] = ""
+                chap["time_progression"] = ""
 
             last_char_state = chap["character_state"]
             processed_chaps.append(chap)
@@ -189,6 +207,9 @@ class StageA(BaseStage):
                                 "character_state": c["character_state"],
                                 "key_events": c.get("key_events", []),
                                 "scene_transitions": c.get("scene_transitions", {}),
+                                "information_flow": c.get("information_flow", {}),
+                                "emotion_arc": c.get("emotion_arc", ""),
+                                "time_progression": c.get("time_progression", ""),
                             }
                             for c in processed_chaps[-50:]
                         ],
@@ -208,6 +229,9 @@ class StageA(BaseStage):
                             "character_state": c["character_state"],
                             "key_events": c.get("key_events", []),
                             "scene_transitions": c.get("scene_transitions", {}),
+                            "information_flow": c.get("information_flow", {}),
+                            "emotion_arc": c.get("emotion_arc", ""),
+                            "time_progression": c.get("time_progression", ""),
                         }
                         for c in processed_chaps
                     ],
@@ -225,6 +249,9 @@ class StageA(BaseStage):
                     "character_state": c["character_state"],
                     "key_events": c.get("key_events", []),
                     "scene_transitions": c.get("scene_transitions", {}),
+                    "information_flow": c.get("information_flow", {}),
+                    "emotion_arc": c.get("emotion_arc", ""),
+                    "time_progression": c.get("time_progression", ""),
                 }
                 for c in processed_chaps
             ],
@@ -247,6 +274,9 @@ class StageA(BaseStage):
                     "character_state": chap.get("character_state", {}),
                     "key_events": chap.get("key_events", []),
                     "scene_transitions": chap.get("scene_transitions", {}),
+                    "information_flow": chap.get("information_flow", {}),
+                    "emotion_arc": chap.get("emotion_arc", ""),
+                    "time_progression": chap.get("time_progression", ""),
                 }
                 cursor.execute(
                     "INSERT OR REPLACE INTO plot_arcs VALUES (?,?,?,?,?)",

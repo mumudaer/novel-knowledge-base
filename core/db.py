@@ -20,7 +20,7 @@ class DatabaseManager:
         "plot_arcs": "(chapter_id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary TEXT, character_state_json TEXT)",
         
         # Stage B: 写作技法
-        "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT)",
+        "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT, anti_pattern TEXT)",
         
         # Stage C: 文风指纹
         "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT, narrative_perspective TEXT, sentence_rhythm TEXT)",
@@ -28,7 +28,8 @@ class DatabaseManager:
         
         # Stage D: 世界观与人物
         "world_settings": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, module TEXT, entity TEXT, content TEXT, tags TEXT, daily_life TEXT, taboos TEXT, conflict_roots TEXT, geography TEXT, economy TEXT, culture TEXT, causal_chain TEXT, rules_exceptions TEXT)",
-        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, fatal_flaw TEXT, symbolism TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, desire_vs_need TEXT, secrets TEXT, fears TEXT, social_masks TEXT, growth_cost TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, arc_trajectory TEXT, internal_dilemma TEXT, decision_pattern TEXT, cognitive_bias TEXT, transformation_trigger TEXT, contrast_design TEXT)",
+        "golden_finger": "(id TEXT PRIMARY KEY, book_name TEXT, name TEXT, type TEXT, abilities TEXT, upgrade_path TEXT, limitations TEXT, cost_layers TEXT, interaction_with_plot TEXT, source_chapter TEXT)",
+        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, fatal_flaw TEXT, symbolism TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, desire_vs_need TEXT, secrets TEXT, fears TEXT, social_masks TEXT, growth_cost TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, arc_trajectory TEXT, internal_dilemma TEXT, decision_pattern TEXT, cognitive_bias TEXT, transformation_trigger TEXT, contrast_design TEXT, archetype_label TEXT, writing_anti_patterns TEXT)",
         "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
         
         # Stage D 扩展: 势力关系网络与设定演变
@@ -37,9 +38,9 @@ class DatabaseManager:
         
         # Stage E: 宏观大纲
         "macro_outlines": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, volume_index INTEGER, chapter_range TEXT, theme TEXT, conflict TEXT, beats_json TEXT, arc TEXT)",
-        "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, resolved_chapter TEXT, resolution_excerpt TEXT)",
+        "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, payoff_timing TEXT, scope_type TEXT, resolved_chapter TEXT, resolution_excerpt TEXT, last_advanced_chapter TEXT)",
         "entity_state_tracker": "(id TEXT PRIMARY KEY, book_name TEXT, entity_name TEXT, chapter_range TEXT, current_state_json TEXT)",
-        "chapter_functions": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, function_type TEXT, structure_pattern_json TEXT, hook_type TEXT, hook_content TEXT, information_gap_json TEXT, active_plotlines TEXT)",
+        "chapter_functions": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, function_type TEXT, pacing_type TEXT, structure_pattern_json TEXT, hook_type TEXT, hook_intensity TEXT, hook_content TEXT, cool_point_type TEXT, arc_length TEXT, information_gap_json TEXT, active_plotlines TEXT)",
         
         # Stage F: 样本库
         "dialogue_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, scene_type TEXT, original_text TEXT, emotional_tension TEXT, subtext TEXT, plot_function TEXT)",
@@ -136,6 +137,9 @@ class DatabaseManager:
         # Stage O: 事件因果图谱
         "story_events": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, event_name TEXT, event_summary TEXT, event_type TEXT, characters_involved TEXT, significance TEXT)",
         "event_causal_edges": "(id TEXT PRIMARY KEY, book_name TEXT, source_event_id TEXT, target_event_id TEXT, relation_type TEXT, relation_detail TEXT)",
+        
+        # 题材裁决规则（后处理聚合）
+        "genre_rules": "(id TEXT PRIMARY KEY, genre TEXT, technique_name TEXT, frequency INTEGER, priority_rank INTEGER, applicable_scenarios TEXT, benchmark_books TEXT, updated_at TEXT)",
         
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",

@@ -35,15 +35,10 @@ class StageE(BaseStage):
         Returns:
             包含 macro_outlines, plot_foreshadowing, entity_state_tracker, chapter_functions, setting_evolutions 的字典
         """
-        # 自适应卷划分：根据总章数动态调整
+        # 自适应卷划分：目标 ~10 卷，每卷最多 75 章（保证摘要不截断）
         total_chapters = len(stage_a_res)
         if chapters_per_volume is None:
-            if total_chapters <= 100:
-                chapters_per_volume = 20  # 短篇小说：20章/卷
-            elif total_chapters <= 300:
-                chapters_per_volume = 50  # 中篇小说：50章/卷
-            else:
-                chapters_per_volume = 100  # 长篇小说：100章/卷
+            chapters_per_volume = min(-(-total_chapters // 10), 75)  # ceil(total/10), 上限 75
         
         logger.info(f"=== 阶段五：宏观大纲与卷节拍聚合 (每 {chapters_per_volume} 章为一卷) ({self.book_name}) ===")
 
@@ -111,9 +106,11 @@ class StageE(BaseStage):
   "foreshadowing": [
     {{
       "hook_name": "伏笔/悬念/核心意象名称",
-      "action": "埋下(plant) 或 回收/呼应(resolve)",
+      "action": "埋下(plant) / 推进(advance) / 回收(resolve) / 延后(defer)",
       "description": "伏笔内容简述或意象呼应方式",
-      "resolution_excerpt": "如果是回收类伏笔，摘录回收时的原文片段(100-200字)；如果是埋下类伏笔，留空"
+      "payoff_timing": "预期回收节奏(immediate近几章/near-term本卷内/mid-arc跨2-3卷/slow-burn大半本书/endgame全书终局)",
+      "scope_type": "伏笔作用范围(book全书/volume本卷/chapter本章)",
+      "resolution_excerpt": "如果是回收类伏笔，摘录回收时的原文片段(100-200字)；否则留空"
     }}
   ],
   "state_changes": [
@@ -157,16 +154,27 @@ class StageE(BaseStage):
 
                     for fs in data.get("foreshadowing", []):
                         if isinstance(fs, dict) and fs.get("hook_name"):
-                            action = fs.get("action", "plant")
-                            status = "已填" if "resolve" in action.lower() or "填" in action else "未填"
+                            action = fs.get("action", "plant").lower()
+                            # 更细粒度状态机
+                            if "resolve" in action or "回收" in action:
+                                status = "resolved"
+                            elif "advance" in action or "推进" in action:
+                                status = "advancing"
+                            elif "defer" in action or "延后" in action:
+                                status = "deferred"
+                            else:
+                                status = "open"
                             result["plot_foreshadowing"].append({
                                 "book_name": self.book_name,
                                 "hook_name": fs["hook_name"],
-                                "planted_chapter": f"{start_chap}-{end_chap}" if status == "未填" else "",
+                                "planted_chapter": f"{start_chap}-{end_chap}" if status == "open" else "",
                                 "planned_payoff": fs.get("description", ""),
                                 "status": status,
-                                "resolved_chapter": f"{start_chap}-{end_chap}" if status == "已填" else "",
+                                "payoff_timing": fs.get("payoff_timing", ""),
+                                "scope_type": fs.get("scope_type", ""),
+                                "resolved_chapter": f"{start_chap}-{end_chap}" if status == "resolved" else "",
                                 "resolution_excerpt": fs.get("resolution_excerpt", ""),
+                                "last_advanced_chapter": f"{start_chap}-{end_chap}" if status == "advancing" else "",
                             })
 
                     for sc in data.get("state_changes", []):
@@ -238,13 +246,17 @@ class StageE(BaseStage):
     {{
       "chapter_id": "章节ID",
       "function_type": "章节功能类型(战斗章/过渡章/高潮章/日常章/揭秘章/铺垫章/转折章)",
+      "pacing_type": "节奏类型(高压/推进/关系/低压/爆发/蓄力)",
       "structure_pattern": {{
         "opening": "开头方式(场景切入/对话切入/悬念切入/回忆切入/动作切入)",
         "development": "发展方式(冲突升级/信息揭露/情感铺垫/多线交织)",
         "ending": "结尾方式(悬念收尾/情感余韵/转折钩子/平静过渡)"
       }},
-      "hook_type": "章末钩子类型(悬念型/反转型/情感型/危机型/无钩子)",
+      "hook_type": "章末钩子类型(突然揭示/紧急危机/未完成动作/身份反转/两难选择/神秘物品/时间限制/承诺威胁/离奇消失/言外之意/意象钩子/回声钩子/留白钩子/无钩子)",
+      "hook_intensity": "悬念强度(1好奇/2关切/3迫切/4生存/5终极)",
       "hook_content": "钩子内容简述(20字内)",
+      "cool_point_type": "爽点类型(打脸/智斗/情感/真相/关系/升级/无爽点)",
+      "arc_length": "所属弧线类型(短弧2-3章/中弧5-8章/长弧全书/无弧线)",
       "information_gap": {{
         "reader_knows": ["读者知道但角色不知道的信息"],
         "character_knows": ["角色知道但读者不知道的信息"],
@@ -254,7 +266,7 @@ class StageE(BaseStage):
     }}
   ]
 }}
-(禁止反引号，如果没有信息差，对应数组留空。active_plotlines 必须标注本章推进了哪些剧情线。必须返回{len(batch_chapters)}个章节的分析结果)"""
+(禁止反引号，如果没有信息差对应数组留空。hook_intensity用数字1-5。active_plotlines必须标注本章推进了哪些剧情线。必须返回{len(batch_chapters)}个章节的分析结果)"""
 
                 try:
                     resp = ollama_chat(prompt_func, 0.2, "E")
@@ -266,9 +278,13 @@ class StageE(BaseStage):
                                     "book_name": self.book_name,
                                     "chapter_id": cf.get("chapter_id", ""),
                                     "function_type": cf.get("function_type", "未知"),
+                                    "pacing_type": cf.get("pacing_type", "未知"),
                                     "structure_pattern": cf.get("structure_pattern", {}),
                                     "hook_type": cf.get("hook_type", "无钩子"),
+                                    "hook_intensity": cf.get("hook_intensity", "0"),
                                     "hook_content": cf.get("hook_content", ""),
+                                    "cool_point_type": cf.get("cool_point_type", "无爽点"),
+                                    "arc_length": cf.get("arc_length", "无弧线"),
                                     "information_gap": cf.get("information_gap", {}),
                                     "active_plotlines": cf.get("active_plotlines", []),
                                 })
@@ -326,14 +342,16 @@ class StageE(BaseStage):
         if m_ids:
             self.chroma.upsert_batch("macro_outlines_kb", m_ids, m_docs, m_metas)
 
-        # 伏笔追踪入库（8个字段）
+        # 伏笔追踪入库
         for fs in results.get("plot_foreshadowing", []):
             fs_id = generate_id(fs["book_name"], fs["hook_name"], fs.get("planted_chapter", ""), fs.get("resolved_chapter", ""))
             cursor.execute(
-                "INSERT OR IGNORE INTO plot_foreshadowing VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO plot_foreshadowing VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (fs_id, fs["book_name"], fs["hook_name"], fs.get("planted_chapter", ""),
-                 fs.get("planned_payoff", ""), fs.get("status", ""), fs.get("resolved_chapter", ""),
-                 fs.get("resolution_excerpt", "")),
+                 fs.get("planned_payoff", ""), fs.get("status", ""),
+                 fs.get("payoff_timing", ""), fs.get("scope_type", ""),
+                 fs.get("resolved_chapter", ""), fs.get("resolution_excerpt", ""),
+                 fs.get("last_advanced_chapter", "")),
             )
             stats["foreshadowing"] += 1
 
@@ -351,10 +369,13 @@ class StageE(BaseStage):
         for cf in results.get("chapter_functions", []):
             cf_id = generate_id(cf["book_name"], cf["chapter_id"])
             cursor.execute(
-                "INSERT OR REPLACE INTO chapter_functions VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO chapter_functions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (cf_id, cf["book_name"], cf["chapter_id"], cf.get("function_type", ""),
+                 cf.get("pacing_type", ""),
                  json.dumps(cf.get("structure_pattern", {}), ensure_ascii=False),
-                 cf.get("hook_type", ""), cf.get("hook_content", ""),
+                 cf.get("hook_type", ""), cf.get("hook_intensity", "0"),
+                 cf.get("hook_content", ""),
+                 cf.get("cool_point_type", ""), cf.get("arc_length", ""),
                  json.dumps(cf.get("information_gap", {}), ensure_ascii=False),
                  json.dumps(cf.get("active_plotlines", []), ensure_ascii=False)),
             )
