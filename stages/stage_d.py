@@ -380,6 +380,7 @@ class StageD(BaseStage):
         else:
             workers = min(STAGE_D_WORKERS, len(pending))
             logger.info(f"[阶段D] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 个采样章节")
+            print(f"  [Stage D] 首次调用需加载 qwen14b 模型到显存 (约30-60秒)，请稍候...", flush=True)
 
             processed_count = 0
             with ThreadPoolExecutor(max_workers=max(workers, 1)) as executor:
