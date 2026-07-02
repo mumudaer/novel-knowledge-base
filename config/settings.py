@@ -56,8 +56,10 @@ STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 
 # 上下文长度配置（根据模型能力和显存限制）
 # Stage A 从 3b 升级为 7b，上下文保持 16384（双并发时显存约 15GB，在安全范围内）
-OLLAMA_NUM_CTX_7B = 16384  # 7b 模型 16K 上下文（双并发时约 15GB）
-OLLAMA_NUM_CTX_14B = 8192  # 14b 模型 8K 上下文（双并发时接近上限）
+# 7b KV cache: 56 KB/token → 20480 tokens ≈ 1.15 GB, model ~4.5 GB → 总计 ~5.7 GB
+OLLAMA_NUM_CTX_7B = 20480  # 容纳 10000 字章节 + 模板 (safe=11950 chars)
+# 14b KV cache: 192 KB/token → 22528 tokens ≈ 4.3 GB, model ~9 GB → 总计 ~13.3 GB (<14.8 GB)
+OLLAMA_NUM_CTX_14B = 22528  # 容纳 10000 字章节 + 模板 (safe=13320 chars)
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
 OLLAMA_TIMEOUT = 600  # 超时时间（秒）
 
@@ -143,7 +145,7 @@ MODEL_CONFIG = {
         "workers": STAGE_D_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.1,
-        "num_predict": 4096,  # 世界观7维+人物33维，重输出
+        "num_predict": 2048,  # 预裁剪文本后输出量可控，2048 足够
     },
     "E": {
         "model": STAGE_E_MODEL,
@@ -157,7 +159,7 @@ MODEL_CONFIG = {
         "workers": STAGE_F_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 4096,  # 5类进阶样本+技法分析，重输出
+        "num_predict": 2048,  # 样本摘录输出量可控，2048 足够
     },
     "G": {
         "model": STAGE_G_MODEL,
@@ -171,7 +173,7 @@ MODEL_CONFIG = {
         "workers": STAGE_H_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 4096,  # 5个子结构同时输出，重输出
+        "num_predict": 2048,  # 使用 Stage A 摘要非原始文本，输出量可控
     },
     "J": {
         "model": STAGE_J_MODEL,
@@ -213,7 +215,7 @@ MODEL_CONFIG = {
         "workers": STAGE_O_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 4096,  # 事件因果图谱，重输出
+        "num_predict": 2048,  # 事件数量可控，2048 足够
     },
     "CTX": {
         "model": STAGE_CTX_MODEL,

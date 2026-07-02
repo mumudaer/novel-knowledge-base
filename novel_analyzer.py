@@ -677,14 +677,18 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
         raw_text = raw_text.lstrip("\ufeff").replace("\ufeff", "")
 
         # 清洗并切分章节
+        logger.debug(f"开始 clean_novel_text (文本长度: {len(raw_text)} 字符)...")
         raw_text = clean_novel_text(raw_text)
+        logger.debug(f"clean_novel_text 完成 (清洗后长度: {len(raw_text)} 字符)")
 
         if len(raw_text) < 500:
             logger.warning(f"\u300a{book_name}\u300b 清洗后正文不足500字，可能是防盗章节或空文件")
 
+        logger.debug(f"开始 smart_split_chapters...")
         chapters = smart_split_chapters(raw_text, book_name)
         total_chapters = len(chapters)
         total_words = len(raw_text)
+        logger.info(f"《{book_name}》 章节切分完成: {total_chapters} 章 (总字数: {total_words})")
 
         # 生成类型标签：优先使用文件名中的标签，降级到 LLM 生成
         if filename_tags:
@@ -706,7 +710,9 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
 {{"tags": "标签1,标签2,标签3,..."}}
 (要求：标签应包含题材类型、风格特点、目标读者等维度，如：玄幻,升级流,热血,男频)"""
 
+                print(f"  [INFO] 正在通过 LLM 生成类型标签 (首次调用需加载模型，约30-90秒)...", flush=True)
                 tag_resp = ollama_chat(tag_prompt, 0.3, "A")
+                logger.debug(f"ollama_chat 完成 (响应长度: {len(tag_resp)} 字符)")
                 tag_data = safe_parse_json(tag_resp)
                 if tag_data and "tags" in tag_data:
                     genre_tags = tag_data["tags"]
@@ -918,6 +924,14 @@ def main():
         print(
             f"  python run_advanced_stages.py --incremental # 增量模式：只处理新增书籍"
         )
+
+    # 截断验证：确认是否有正文损失
+    from core.ollama_client import get_truncation_count
+    truncations = get_truncation_count()
+    if truncations == 0:
+        print("\n✅ 截断验证通过：0 次正文截断，所有章节完整喂给 LLM。")
+    else:
+        print(f"\n❌ 截断验证失败：{truncations} 次正文截断！存在正文损失！")
 
     print("\n小说库工业化构建全部执行完成！")
 

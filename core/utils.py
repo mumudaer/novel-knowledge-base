@@ -165,6 +165,7 @@ def clean_novel_text(text: str) -> str:
     # 8. 清理行首行尾空白
     lines = [line.strip() for line in text.split("\n")]
     text = "\n".join(lines)
+    logger.debug(f"clean_novel_text: 全部清理完成, 最终长度 {len(text)}")
 
     return text.strip()
 
@@ -240,7 +241,9 @@ def smart_split_chapters(
     original_length = len(text.replace("\n", "").replace(" ", ""))
 
     # === 第一步：用 re.split 在全文中搜索章节标记 ===
+    logger.info(f"《{book_name}》 smart_split 步骤1: re.split 开始 (文本 {len(text)} 字符)...")
     parts = _STRONG_CHAPTER_RE.split(text)
+    logger.info(f"《{book_name}》 smart_split 步骤1: re.split 完成, 共 {len(parts)} 个片段")
 
     chapters = []
     # parts[0] 是第一个章节标题之前的内容（序言/前言）
@@ -282,14 +285,23 @@ def smart_split_chapters(
         )
 
     # === 第三步：对过长章节进行二次切分（语义边界 + 滑动窗口） ===
+    _long_chapters = [c for c in chapters if len(c["text"]) > max_chunk * 2]
+    if _long_chapters:
+        logger.info(f"《{book_name}》 smart_split 步骤3: {len(_long_chapters)} 个过长章节需要二次切分 (max_chunk={max_chunk})")
     final_chapters = []
+    _step3_max_iterations = len(text) // 100 + 1000  # 安全上限：防止死循环
     for chap in chapters:
         if len(chap["text"]) > max_chunk * 2:
             text_content = chap["text"]
             pos = 0
             sub_index = 1
+            _step3_iter = 0
 
             while pos < len(text_content):
+                _step3_iter += 1
+                if _step3_iter > _step3_max_iterations:
+                    logger.error(f"《{book_name}》 smart_split_chapters 第三步疑似死循环，强制退出！pos={pos}, len={len(text_content)}, max_chunk={max_chunk}")
+                    break
                 cut_pos = _find_semantic_boundary(text_content, pos, max_chunk)
 
                 chunk_text = text_content[pos:cut_pos].strip()
@@ -311,6 +323,11 @@ def smart_split_chapters(
                         pos = cut_pos
                     else:
                         pos = new_pos
+                    # 防护：剩余文本不足 max_chunk 时取消 overlap，
+                    # 避免 pos 回退形成死循环
+                    remaining = len(text_content) - pos
+                    if remaining <= max_chunk:
+                        pos = cut_pos
         else:
             final_chapters.append(chap)
 

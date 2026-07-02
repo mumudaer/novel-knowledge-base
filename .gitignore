@@ -3,4 +3,5 @@ novels/
 .obsidian
 novel_kb/
 novel-wait/
-# venv
+venv
+reasonix.toml

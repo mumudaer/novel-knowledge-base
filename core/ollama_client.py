@@ -25,6 +25,15 @@ from config.settings import (
 
 logger = logging.getLogger(__name__)
 
+# 全局截断计数器（用于验证是否有正文损失）
+_truncation_count = 0
+_truncation_lock = threading.Lock()
+
+
+def get_truncation_count() -> int:
+    """获取截断发生次数（0 = 零正文损失）"""
+    return _truncation_count
+
 
 class VRAMManager:
     """
@@ -183,14 +192,31 @@ class OllamaClient:
             1.5 if ord(ch) > 127 else 0.25 for ch in prompt
         )
         if estimated_tokens > safe_token_limit:
-            # 从末尾截断，保留指令部分（通常在 prompt 开头）
-            max_chars = int(safe_token_limit / 1.0)  # 偏保守地按 1 token/字符
-            original_len = len(prompt)
-            prompt = prompt[:max_chars] + f"\n...(内容已截断，原始长度: {original_len}字)"
-            logger.warning(
+            # 保留头部（指令）和尾部（JSON Schema），切除中间正文
+            # 找到 JSON schema 起始位置（最后一个 { 块）
+            json_start = prompt.rfind('\n{')
+            if json_start == -1:
+                json_start = prompt.rfind('{')
+            if json_start > 0:
+                head = prompt[:json_start]
+                tail = prompt[json_start:]
+                tail_tokens = sum(1.5 if ord(ch) > 127 else 0.25 for ch in tail)
+                head_budget_tokens = safe_token_limit - tail_tokens
+                head_budget_chars = int(head_budget_tokens / 1.5)  # 与估算一致，按 1.5 token/字
+                if head_budget_chars < 200:
+                    head_budget_chars = 200  # 至少保留 200 字指令
+                prompt = head[:head_budget_chars] + "\n...(正文已截断)..." + tail
+            else:
+                # 无 JSON schema，从尾部截断
+                max_chars = int(safe_token_limit / 1.5)
+                prompt = prompt[:max_chars] + f"\n...(内容已截断，原始长度: {len(prompt)}字)"
+            logger.error(
                 f"⚠️ [Stage {stage}] Prompt 过长（估算 {int(estimated_tokens)} token，"
-                f"上限 {safe_token_limit} token），已截断至 {max_chars} 字符"
+                f"上限 {safe_token_limit} token），已截断正文，保留指令和输出格式"
             )
+            with _truncation_lock:
+                global _truncation_count
+                _truncation_count += 1
 
         # 显存分时复用：确保当前模型已加载，必要时卸载旧模型
         vram = get_vram_manager()
