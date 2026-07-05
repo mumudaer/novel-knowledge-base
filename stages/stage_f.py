@@ -449,7 +449,7 @@ class StageF(BaseStage):
 
         # 区间择优采样 + 过滤已完成
         sampled = self._select_sample_chapters(chapters)
-        logger.info(f"[阶段F] 区间择优采样: {len(sampled)}/{len(chapters)} 章 (采样率 {len(sampled)//max(len(chapters),1)*100}%)")
+        logger.info(f"[阶段F] 区间择优采样: {len(sampled)}/{len(chapters)} 章 (采样率 {len(sampled)*100//max(len(chapters),1)}%)")
         pending = [c for c in sampled if c.get("id") not in completed_ids]
         if not pending:
             logger.info(f"[阶段F] 所有章节已处理完毕")
@@ -490,10 +490,7 @@ class StageF(BaseStage):
                     self.save_cache({"data": completed_items})
                     raise
 
-            # 最终保存断点（先清理临时字段）
-            for item in completed_items:
-                item.pop("_chapter_id", None)
-                item.pop("_chroma_text", None)
+            # 最终保存断点
             self.save_cache({"data": completed_items})
 
         # 生成风格总结（基于已提取的样本）

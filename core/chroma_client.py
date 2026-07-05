@@ -164,6 +164,18 @@ class ChromaManager:
         metadatas: List[Dict[str, Any]],
     ):
         """批量写入向量数据"""
+        # 批次内去重：相同 ID 只保留第一条
+        if ids:
+            seen = set()
+            unique_ids, unique_docs, unique_metas = [], [], []
+            for j, doc_id in enumerate(ids):
+                if doc_id not in seen:
+                    seen.add(doc_id)
+                    unique_ids.append(doc_id)
+                    unique_docs.append(documents[j])
+                    unique_metas.append(metadatas[j])
+            ids, documents, metadatas = unique_ids, unique_docs, unique_metas
+
         collection = self.get_collection(collection_name)
 
         # 分批写入，避免内存峰值

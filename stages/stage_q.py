@@ -203,19 +203,163 @@ class QualityChecker:
 
         return issues
 
+    def check_stage_f(self, book_name: str, results: Any) -> List[QualityIssue]:
+        """检查 Stage F（样本库）质量"""
+        issues = []
+        if not isinstance(results, dict):
+            return issues
+
+        # 各样本类型的检查配置: (key, label, min_text_len, min_wq)
+        sample_checks = [
+            ("dialogue_samples", "对话样本", 30, 3),
+            ("description_samples", "描写样本", 30, 3),
+            ("transition_samples", "转场样本", 20, 3),
+            ("narrative_distance", "叙事距离", 20, 3),
+            ("show_tell_patterns", "Show/Tell", 20, 3),
+            ("action_scene_samples", "动作场景", 30, 3),
+            ("climax_excerpts", "高潮段落", 50, 3),
+            ("memorable_quotes", "金句名句", 15, 3),
+        ]
+
+        for key, label, min_len, min_wq in sample_checks:
+            samples = results.get(key, [])
+            if not samples:
+                continue  # 该类型无样本，不报错（可能本章确实没有）
+
+            empty_count = 0
+            short_count = 0
+            low_wq_count = 0
+
+            for s in samples:
+                text = s.get("original_text") or s.get("original_example") or s.get("quote_text") or ""
+                wq = s.get("writing_quality", 5)
+
+                if not text or not text.strip():
+                    empty_count += 1
+                elif len(text) < min_len:
+                    short_count += 1
+
+                if isinstance(wq, (int, float)) and wq < min_wq:
+                    low_wq_count += 1
+
+            total = len(samples)
+            if empty_count > 0:
+                issues.append(QualityIssue(
+                    stage="F", book_name=book_name, severity="high",
+                    description=f"{label} 中 {empty_count}/{total} 条 original_text 为空",
+                    suggestion="可能是 LLM 返回格式异常，检查对应章节的 prompt 响应",
+                ))
+            if short_count > total * 0.3:
+                issues.append(QualityIssue(
+                    stage="F", book_name=book_name, severity="medium",
+                    description=f"{label} 中 {short_count}/{total} 条文本过短 (<{min_len}字)",
+                    suggestion="采样章节可能信息密度偏低，或 LLM 摘录过于保守",
+                ))
+            if low_wq_count > total * 0.5:
+                issues.append(QualityIssue(
+                    stage="F", book_name=book_name, severity="medium",
+                    description=f"{label} 中 {low_wq_count}/{total} 条 writing_quality < {min_wq}",
+                    suggestion="该类型样本质量偏低，考虑增加采样章节或调整 prompt",
+                ))
+
+        # 高潮段落专项：检查 emotional_impact
+        for climax in results.get("climax_excerpts", []):
+            if not climax.get("emotional_impact", "").strip():
+                issues.append(QualityIssue(
+                    stage="F", book_name=book_name, severity="medium",
+                    description="存在高潮段落缺少 emotional_impact 分析",
+                    suggestion="LLM 可能未按要求输出情感冲击力分析",
+                ))
+
+        return issues
+
+    def check_stage_c(self, book_name: str, results: Any) -> List[QualityIssue]:
+        """检查 Stage C（文风指纹）质量"""
+        issues = []
+        if not isinstance(results, dict):
+            return issues
+
+        fingerprints = results.get("author_fingerprints", [])
+        for fp in fingerprints:
+            if not fp.get("narrative_perspective", ""):
+                issues.append(QualityIssue(
+                    stage="C", book_name=book_name, severity="medium",
+                    description="文风指纹缺少叙事视角字段",
+                ))
+
+        sensory = results.get("sensory_db") or results.get("sensory_mappings", [])
+        if not sensory:
+            issues.append(QualityIssue(
+                stage="C", book_name=book_name, severity="high",
+                description="未提取到任何感官映射",
+                suggestion="可能是纯对话小说或模型未正常输出",
+            ))
+
+        return issues
+
+    def check_stage_g(self, book_name: str, results: Any) -> List[QualityIssue]:
+        """检查 Stage G（人物深度特征）质量"""
+        issues = []
+        if not isinstance(results, dict):
+            return issues
+
+        speech = results.get("speech_style") or results.get("character_speech_style", [])
+        if not speech:
+            issues.append(QualityIssue(
+                stage="G", book_name=book_name, severity="high",
+                description="未提取到任何人物语言风格",
+            ))
+
+        behavior = results.get("behavior_marks") or results.get("character_behavior_marks", [])
+        if not behavior:
+            issues.append(QualityIssue(
+                stage="G", book_name=book_name, severity="medium",
+                description="未提取到任何人物行为标志",
+            ))
+
+        relations = results.get("relationship_dynamics") or results.get("character_relationship_dynamics", [])
+        if not relations:
+            issues.append(QualityIssue(
+                stage="G", book_name=book_name, severity="medium",
+                description="未提取到任何人物关系动态",
+            ))
+
+        return issues
+
+    def check_stage_o(self, book_name: str, results: Any) -> List[QualityIssue]:
+        """检查 Stage O（事件因果图谱）质量"""
+        issues = []
+        if not isinstance(results, dict):
+            return issues
+
+        events = results.get("story_events", [])
+        if not events:
+            issues.append(QualityIssue(
+                stage="O", book_name=book_name, severity="high",
+                description="未提取到任何关键事件",
+            ))
+
+        edges = results.get("event_causal_edges", [])
+        if edges:
+            for edge in edges:
+                if not edge.get("relation_type", ""):
+                    issues.append(QualityIssue(
+                        stage="O", book_name=book_name, severity="low",
+                        description="存在因果边缺少 relation_type",
+                    ))
+
+        return issues
+
     def check_stage_h(self, book_name: str, results: Any) -> List[QualityIssue]:
         """检查 Stage H（全书宏观分析）质量"""
         issues = []
-
         if isinstance(results, dict):
-            structure = results.get("book_structure", [])
-            if not structure:
+            if not results.get("book_structure"):
                 issues.append(QualityIssue(
                     stage="H", book_name=book_name, severity="high",
                     description="未生成书籍结构分析",
                     suggestion="建议检查 Stage A 的摘要是否覆盖了全书",
                 ))
-
         return issues
 
     def run_check(self, stage: str, book_name: str, results: Any) -> List[QualityIssue]:
@@ -223,9 +367,13 @@ class QualityChecker:
         checker_map = {
             "A": self.check_stage_a,
             "B": self.check_stage_b,
+            "C": self.check_stage_c,
             "D": self.check_stage_d,
             "E": self.check_stage_e,
+            "F": self.check_stage_f,
+            "G": self.check_stage_g,
             "H": self.check_stage_h,
+            "O": self.check_stage_o,
         }
 
         checker = checker_map.get(stage)
