@@ -666,7 +666,7 @@ class StageF(BaseStage):
                 ds["original_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO dialogue_samples VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO dialogue_samples VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     ds_id,
                     ds["book_name"],
