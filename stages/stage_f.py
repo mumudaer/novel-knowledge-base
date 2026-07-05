@@ -4,6 +4,8 @@ Stage F: 对话/描写/动作专项样本库
 """
 
 import json
+import re
+import math
 import logging
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,6 +25,39 @@ class StageF(BaseStage):
 
     def __init__(self, book_name: str, category: str):
         super().__init__("F", book_name, category)
+
+    @staticmethod
+    def _compute_chunk_score(text: str) -> float:
+        """计算 chunk 综合质量预评分（0-1）"""
+        if not text:
+            return 0.0
+        total = len(text)
+        dialogue_chars = sum(len(m) for m in re.findall(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', text))
+        dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
+        emotion_count = sum(1 for c in text if c in ('！', '？', '…'))
+        emotion_density = min(1.0, emotion_count / max(total, 1) * 200)
+        unique_ratio = len(set(text)) / max(total, 1)
+        vocab_richness = min(1.0, unique_ratio * 8)
+        return dialogue_density * 0.4 + emotion_density * 0.3 + vocab_richness * 0.3
+
+    def _select_sample_chapters(self, chapters):
+        """区间择优采样：均分区间，每区间取评分最高 chunk"""
+        total = len(chapters)
+        sample_count = max(10, min(total, int(10 + 5 * math.sqrt(total / 100))))
+        if total <= sample_count:
+            return chapters
+        interval = total / sample_count
+        selected = []
+        for i in range(sample_count):
+            start = int(i * interval)
+            end = int((i + 1) * interval) if i < sample_count - 1 else total
+            best_idx, best_score = start, -1
+            for j in range(start, min(end, total)):
+                score = self._compute_chunk_score(chapters[j].get("text", ""))
+                if score > best_score:
+                    best_score, best_idx = score, j
+            selected.append(chapters[best_idx])
+        return selected
 
     def _extract_basic_samples(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
         """批次1：提取基础样本（对话+描写+转场）"""
@@ -48,7 +83,8 @@ class StageF(BaseStage):
       "emotional_tension": "情绪张力分析(如:表面平静暗流涌动/激烈对抗/温馨感人，30字内)",
       "subtext": "潜台词分析(角色真正想表达但未明说的内容，50字内)",
       "plot_function": "对话推动剧情的作用(如:揭露秘密/建立联盟/引发冲突/传递信息，30字内)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "description_samples": [
@@ -57,7 +93,8 @@ class StageF(BaseStage):
       "original_text": "从原文中原封不动摘录的完整描写段落（200-400字）",
       "technique_analysis": "技法分析(如:动词精准/五感并用/意识流/白描/工笔，50字内)",
       "sensory_details": "感官细节(视觉/听觉/嗅觉/触觉/味觉的运用，50字内)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "transition_samples": [
@@ -65,13 +102,16 @@ class StageF(BaseStage):
       "transition_type": "转场类型(场景切换/时间跳跃/视角切换/蒙太奇)",
       "original_text": "从原文中原封不动摘录的转场段落（100-300字，包含转场前后的衔接）",
       "technique_analysis": "转场技法分析(如:空行分隔/时间标记/视角切换/意象过渡，50字内)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ]
 }}
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
-2. 每个摘录必须附带 excerpt_accuracy 自评（1-10分，10分表示完全原文）
+2. 每个摘录必须附带 excerpt_accuracy（原文准确度1-10）+ writing_quality（写作质量1-10）
+   writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
+   ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
 3. 每章最多提取 2-3 个最典型的对话样本、2-3 个描写样本、1-2 个转场样本
 4. 优先选择包含完整情境、情绪转变、技法突出的段落
 5. 转场样本要特别关注章节之间、场景之间的过渡手法
@@ -93,6 +133,7 @@ class StageF(BaseStage):
                                 "emotional_tension": ds.get("emotional_tension", ""),
                                 "subtext": ds.get("subtext", ""),
                                 "plot_function": ds.get("plot_function", ""),
+                                "writing_quality": ds.get("writing_quality", 5),
                             }
                         )
 
@@ -110,6 +151,7 @@ class StageF(BaseStage):
                                     "technique_analysis", ""
                                 ),
                                 "sensory_details": desc.get("sensory_details", ""),
+                                "writing_quality": desc.get("writing_quality", 5),
                             }
                         )
 
@@ -124,6 +166,7 @@ class StageF(BaseStage):
                                 "technique_analysis": trans.get(
                                     "technique_analysis", ""
                                 ),
+                                "writing_quality": trans.get("writing_quality", 5),
                             }
                         )
         except Exception as e:
@@ -157,7 +200,8 @@ class StageF(BaseStage):
       "distance_type": "叙事距离类型(贴近内心/中等距离/全知鸟瞰)",
       "trigger_reason": "触发距离变化的原因(如:情感高潮/信息揭露/场景转换，50字内)",
       "original_example": "原文示例(摘录体现该距离的关键段落，100-200字)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "show_tell_patterns": [
@@ -166,7 +210,8 @@ class StageF(BaseStage):
       "ratio_estimate": "Show vs Tell 比例估算(如:7:3/5:5，10字内)",
       "switching_triggers": "切换时机(如:情感场景用Show/背景介绍用Tell，50字内)",
       "original_example": "原文示例(摘录体现该模式的关键段落，100-200字)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "action_scene_samples": [
@@ -176,7 +221,8 @@ class StageF(BaseStage):
       "technique_analysis": "技法分析(如:短句快节奏/动词精准/感官并用/视角切换，50字内)",
       "pacing_analysis": "节奏控制分析(如:快慢交替/逐步加速/爆发式高潮，50字内)",
       "sensory_details": "感官细节(视觉/听觉/触觉的运用，50字内)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "climax_excerpts": [
@@ -185,7 +231,8 @@ class StageF(BaseStage):
       "original_text": "从原文中原封不动摘录的高潮段落（200-400字）",
       "technique_analysis": "技法分析(如:短句爆发/感官轰炸/情感渲染/悬念释放，50字内)",
       "emotional_impact": "情感冲击力分析(如:震撼/感动/紧张/释然，50字内)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ],
   "memorable_quotes": [
@@ -194,13 +241,16 @@ class StageF(BaseStage):
       "context": "上下文背景(如:主角在绝境中的感悟/角色间的哲学对话，50字内)",
       "technique_analysis": "技法分析(如:对比/排比/隐喻/哲理/金句结构，50字内)",
       "quote_type": "金句类型(哲理句/经典台词/情感金句/励志金句/讽刺金句)",
-      "excerpt_accuracy": 10
+      "excerpt_accuracy": 10,
+      "writing_quality": 8
     }}
   ]
 }}
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
-2. 每个摘录必须附带 excerpt_accuracy 自评（1-10分，10分表示完全原文）
+2. 每个摘录必须附带 excerpt_accuracy（原文准确度1-10）+ writing_quality（写作质量1-10）
+   writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
+   ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
 3. 必须分析叙事距离的变化（何时贴近内心、何时拉远鸟瞰）！
 4. 必须分析 Show vs Tell 的比例和切换时机！
 5. 如果本章有动作/战斗/追逐/竞技场景，必须提取高质量的动作场景范文！没有则返回空数组！
@@ -225,6 +275,7 @@ class StageF(BaseStage):
                                 "distance_type": nd.get("distance_type"),
                                 "trigger_reason": nd.get("trigger_reason", ""),
                                 "original_example": nd.get("original_example"),
+                                "writing_quality": nd.get("writing_quality", 5),
                             }
                         )
 
@@ -242,6 +293,7 @@ class StageF(BaseStage):
                                 "ratio_estimate": st.get("ratio_estimate", ""),
                                 "switching_triggers": st.get("switching_triggers", ""),
                                 "original_example": st.get("original_example"),
+                                "writing_quality": st.get("writing_quality", 5),
                             }
                         )
 
@@ -395,8 +447,10 @@ class StageF(BaseStage):
         if completed_ids:
             logger.info(f"✅ [阶段F] 恢复断点：已完成 {len(completed_ids)}/{len(chapters)} 章")
 
-        # 过滤已完成的章节
-        pending = [c for c in chapters if c.get("id") not in completed_ids]
+        # 区间择优采样 + 过滤已完成
+        sampled = self._select_sample_chapters(chapters)
+        logger.info(f"[阶段F] 区间择优采样: {len(sampled)}/{len(chapters)} 章 (采样率 {len(sampled)//max(len(chapters),1)*100}%)")
+        pending = [c for c in sampled if c.get("id") not in completed_ids]
         if not pending:
             logger.info(f"[阶段F] 所有章节已处理完毕")
         else:
@@ -436,7 +490,10 @@ class StageF(BaseStage):
                     self.save_cache({"data": completed_items})
                     raise
 
-            # 最终保存断点
+            # 最终保存断点（先清理临时字段）
+            for item in completed_items:
+                item.pop("_chapter_id", None)
+                item.pop("_chroma_text", None)
             self.save_cache({"data": completed_items})
 
         # 生成风格总结（基于已提取的样本）
@@ -619,6 +676,7 @@ class StageF(BaseStage):
                     ds.get("emotional_tension", ""),
                     ds.get("subtext", ""),
                     ds.get("plot_function", ""),
+                    ds.get("writing_quality", 5),
                 ),
             )
             stats["dialogue_samples"] += 1
@@ -653,7 +711,7 @@ class StageF(BaseStage):
                 desc["original_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO description_samples VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO description_samples VALUES (?,?,?,?,?,?,?,?)",
                 (
                     desc_id,
                     desc["book_name"],
@@ -662,6 +720,7 @@ class StageF(BaseStage):
                     desc["original_text"],
                     desc.get("technique_analysis", ""),
                     desc.get("sensory_details", ""),
+                    desc.get("writing_quality", 5),
                 ),
             )
             stats["description_samples"] += 1
@@ -695,7 +754,7 @@ class StageF(BaseStage):
                 trans["original_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO transition_samples VALUES (?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO transition_samples VALUES (?,?,?,?,?,?,?)",
                 (
                     trans_id,
                     trans["book_name"],
@@ -703,6 +762,7 @@ class StageF(BaseStage):
                     trans["transition_type"],
                     trans["original_text"],
                     trans.get("technique_analysis", ""),
+                    trans.get("writing_quality", 5),
                 ),
             )
             stats["transition_samples"] += 1
@@ -749,7 +809,7 @@ class StageF(BaseStage):
         for nd in results.get("narrative_distance", []):
             nd_id = generate_id(nd["book_name"], nd["chapter_id"], nd["distance_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO narrative_distance VALUES (?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO narrative_distance VALUES (?,?,?,?,?,?,?)",
                 (
                     nd_id,
                     nd["book_name"],
@@ -757,6 +817,7 @@ class StageF(BaseStage):
                     nd["distance_type"],
                     nd.get("trigger_reason", ""),
                     nd.get("original_example", ""),
+                    nd.get("writing_quality", 5),
                 ),
             )
             stats["narrative_distance"] += 1
@@ -765,7 +826,7 @@ class StageF(BaseStage):
         for st in results.get("show_tell_patterns", []):
             st_id = generate_id(st["book_name"], st["chapter_id"], st["pattern_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO show_tell_patterns VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO show_tell_patterns VALUES (?,?,?,?,?,?,?,?)",
                 (
                     st_id,
                     st["book_name"],
@@ -774,6 +835,7 @@ class StageF(BaseStage):
                     st.get("ratio_estimate", ""),
                     st.get("switching_triggers", ""),
                     st.get("original_example", ""),
+                    st.get("writing_quality", 5),
                 ),
             )
             stats["show_tell_patterns"] += 1
@@ -787,7 +849,7 @@ class StageF(BaseStage):
                 action["original_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO action_scene_samples VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO action_scene_samples VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     action_id,
                     action["book_name"],
@@ -797,6 +859,7 @@ class StageF(BaseStage):
                     action.get("technique_analysis", ""),
                     action.get("pacing_analysis", ""),
                     action.get("sensory_details", ""),
+                    action.get("writing_quality", 5),
                 ),
             )
             stats["action_scene_samples"] += 1
@@ -837,7 +900,7 @@ class StageF(BaseStage):
                 climax["original_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO climax_excerpts VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO climax_excerpts VALUES (?,?,?,?,?,?,?,?)",
                 (
                     climax_id,
                     climax["book_name"],
@@ -846,6 +909,7 @@ class StageF(BaseStage):
                     climax["original_text"],
                     climax.get("technique_analysis", ""),
                     climax.get("emotional_impact", ""),
+                    climax.get("writing_quality", 5),
                 ),
             )
             stats["climax_excerpts"] += 1
@@ -908,7 +972,7 @@ class StageF(BaseStage):
                 quote["quote_text"][:50],
             )
             cursor.execute(
-                "INSERT OR REPLACE INTO memorable_quotes VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO memorable_quotes VALUES (?,?,?,?,?,?,?,?)",
                 (
                     quote_id,
                     quote["book_name"],
@@ -917,6 +981,7 @@ class StageF(BaseStage):
                     quote.get("context", ""),
                     quote.get("technique_analysis", ""),
                     quote.get("quote_type", ""),
+                    quote.get("writing_quality", 5),
                 ),
             )
             stats["memorable_quotes"] += 1

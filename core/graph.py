@@ -25,42 +25,43 @@ class GraphManager:
         """初始化图谱管理器"""
         self.graph_path = graph_path or os.path.join(BASE_DIR, "knowledge_graph.graphml")
         self.graph: Optional[nx.DiGraph] = None
+        self._lock = threading.Lock()
 
     def load(self) -> nx.DiGraph:
-        """加载或创建知识图谱"""
+        """加载或创建知识图谱（线程安全）"""
         if self.graph is not None:
             return self.graph
-
-        if os.path.exists(self.graph_path):
-            try:
-                self.graph = nx.read_graphml(self.graph_path)
-                logger.info(f"✅ 知识图谱加载成功: {self.graph_path}")
-            except Exception as e:
-                logger.warning(f"⚠️ 知识图谱加载失败: {e}，将创建新图谱")
+        with self._lock:
+            if self.graph is not None:
+                return self.graph
+            if os.path.exists(self.graph_path):
                 try:
-                    os.remove(self.graph_path)
-                except Exception:
-                    pass
+                    self.graph = nx.read_graphml(self.graph_path)
+                    logger.info(f"✅ 知识图谱加载成功: {self.graph_path}")
+                except Exception as e:
+                    logger.warning(f"⚠️ 知识图谱加载失败: {e}，将创建新图谱")
+                    try:
+                        os.remove(self.graph_path)
+                    except Exception:
+                        pass
+                    self.graph = nx.DiGraph()
+            else:
                 self.graph = nx.DiGraph()
-        else:
-            self.graph = nx.DiGraph()
-            logger.info("📊 创建新知识图谱")
-
-        return self.graph
+                logger.info("📊 创建新知识图谱")
+            return self.graph
 
     def save(self):
-        """保存知识图谱到文件"""
-        if self.graph is None:
-            logger.warning("⚠️ 知识图谱未初始化，跳过保存")
-            return
-
-        try:
-            # 清理图谱中的非法字符
-            sanitized = self._sanitize_graph()
-            nx.write_graphml(sanitized, self.graph_path)
-            logger.info(f"✅ 知识图谱保存成功: {self.graph_path}")
-        except Exception as e:
-            logger.error(f"❌ 知识图谱保存失败: {e}")
+        """保存知识图谱到文件（线程安全）"""
+        with self._lock:
+            if self.graph is None:
+                logger.warning("⚠️ 知识图谱未初始化，跳过保存")
+                return
+            try:
+                sanitized = self._sanitize_graph()
+                nx.write_graphml(sanitized, self.graph_path)
+                logger.info(f"✅ 知识图谱保存成功: {self.graph_path}")
+            except Exception as e:
+                logger.error(f"❌ 知识图谱保存失败: {e}")
 
     def _sanitize_graph(self) -> nx.DiGraph:
         """清理图谱中的非法字符（GraphML 格式要求）"""

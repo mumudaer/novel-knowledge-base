@@ -61,7 +61,7 @@ OLLAMA_NUM_CTX_7B = 20480  # 容纳 10000 字章节 + 模板 (safe=11950 chars)
 # 14b KV cache: 192 KB/token → 14336 tokens ≈ 2.8 GB, model ~9 GB → 总计 ~12 GB
 OLLAMA_NUM_CTX_14B = 14336  # 配合 SPLIT_THRESHOLD=3500, 每块≤3500字完整喂给 LLM (D-char budget=4909)
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
-OLLAMA_TIMEOUT = 600  # 超时时间（秒）
+OLLAMA_TIMEOUT = 300  # 超时时间（秒）（14b正常60-120s/次，300s已含2.5-5x余量）
 
 # Embedding 模型配置（中文优化）
 # bge-m3 是 BAAI 发布的多语言 embedding 模型，中文语义检索质量远优于 ChromaDB 默认的英文模型
@@ -145,7 +145,7 @@ MODEL_CONFIG = {
         "workers": STAGE_D_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.1,
-        "num_predict": 2048,  # 预裁剪文本后输出量可控，2048 足够
+        "num_predict": 4096,  # 33维度人物档案 + 世界观7维 + 编年史，重输出
     },
     "E": {
         "model": STAGE_E_MODEL,
@@ -159,7 +159,7 @@ MODEL_CONFIG = {
         "workers": STAGE_F_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 样本摘录输出量可控，2048 足够
+        "num_predict": 4096,  # 11种样本结构(对话/描写/转场/叙事/高潮/金句等)，重输出
     },
     "G": {
         "model": STAGE_G_MODEL,
@@ -173,7 +173,7 @@ MODEL_CONFIG = {
         "workers": STAGE_H_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 使用 Stage A 摘要非原始文本，输出量可控
+        "num_predict": 4096,  # 17种宏观结构(剧情线/情感/高潮/类型等)，重输出
     },
     "J": {
         "model": STAGE_J_MODEL,

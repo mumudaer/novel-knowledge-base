@@ -411,6 +411,10 @@ class StageD(BaseStage):
                     self.save_cache({"data": completed_items})
                     raise
 
+            # 清理临时字段，防止污染持久化缓存
+            for item in completed_items:
+                item.pop("_chapter_id", None)
+                item.pop("_chroma_text", None)
             self.save_cache({"data": completed_items})
 
         logger.info(

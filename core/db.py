@@ -43,8 +43,8 @@ class DatabaseManager:
         "chapter_functions": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, function_type TEXT, pacing_type TEXT, structure_pattern_json TEXT, hook_type TEXT, hook_intensity TEXT, hook_content TEXT, cool_point_type TEXT, arc_length TEXT, information_gap_json TEXT, active_plotlines TEXT)",
         
         # Stage F: 样本库
-        "dialogue_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, scene_type TEXT, original_text TEXT, emotional_tension TEXT, subtext TEXT, plot_function TEXT)",
-        "description_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, description_type TEXT, original_text TEXT, technique_analysis TEXT, sensory_details TEXT)",
+        "dialogue_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, scene_type TEXT, original_text TEXT, emotional_tension TEXT, subtext TEXT, plot_function TEXT, writing_quality INTEGER DEFAULT 5)",
+        "description_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, description_type TEXT, original_text TEXT, technique_analysis TEXT, sensory_details TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # Stage G: 人物深度特征
         "character_speech_style": "(id TEXT PRIMARY KEY, book_name TEXT, character_name TEXT, catchphrases TEXT, vocabulary_preference TEXT, sentence_pattern TEXT, tone_contexts_json TEXT, dialogue_samples_json TEXT)",
@@ -59,7 +59,7 @@ class DatabaseManager:
         "symbol_system": "(id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)",
         
         # Stage F 扩展: 转场样本与风格总结
-        "transition_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, transition_type TEXT, original_text TEXT, technique_analysis TEXT)",
+        "transition_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, transition_type TEXT, original_text TEXT, technique_analysis TEXT, writing_quality INTEGER DEFAULT 5)",
         "style_summaries": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary_type TEXT, scene_or_desc_type TEXT, style_description TEXT, key_features TEXT)",
         
         # Stage H 扩展: 信息揭露节奏、章节模式、情感转变铺垫
@@ -73,8 +73,8 @@ class DatabaseManager:
         "conflict_escalation": "(id TEXT PRIMARY KEY, book_name TEXT, conflict_line TEXT, escalation_steps_json TEXT, escalation_pattern TEXT)",
         
         # Stage F 扩展: 叙事距离控制与 Show vs Tell 策略
-        "narrative_distance": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, distance_type TEXT, trigger_reason TEXT, original_example TEXT)",
-        "show_tell_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, pattern_type TEXT, ratio_estimate TEXT, switching_triggers TEXT, original_example TEXT)",
+        "narrative_distance": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, distance_type TEXT, trigger_reason TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
+        "show_tell_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, pattern_type TEXT, ratio_estimate TEXT, switching_triggers TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # Stage I: 纯统计模块
         "book_statistics": "(id TEXT PRIMARY KEY, book_name TEXT, total_words INTEGER, avg_chapter_words INTEGER, min_chapter_words INTEGER, max_chapter_words INTEGER, median_chapter_words INTEGER, dialogue_ratio REAL, description_ratio REAL, avg_paragraph_length REAL, short_para_ratio REAL, medium_para_ratio REAL, long_para_ratio REAL, rhythm_pattern TEXT)",
@@ -96,20 +96,20 @@ class DatabaseManager:
         "genre_specific_techniques": "(id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT, original_example TEXT, applicable_scenarios TEXT)",
         
         # 动作/战斗场景范文（武侠/玄幻/竞技）
-        "action_scene_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, action_type TEXT, original_text TEXT, technique_analysis TEXT, pacing_analysis TEXT, sensory_details TEXT)",
+        "action_scene_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, action_type TEXT, original_text TEXT, technique_analysis TEXT, pacing_analysis TEXT, sensory_details TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # 书籍元数据（从文件信息自动生成）
         "book_metadata": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, genre_tags TEXT, total_chapters INTEGER, total_words INTEGER, description TEXT, added_at TEXT)",
         
         # ===== 覆盖率补强 =====
         # 高潮段落/名场面原文提取
-        "climax_excerpts": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, excerpt_type TEXT, original_text TEXT, technique_analysis TEXT, emotional_impact TEXT)",
+        "climax_excerpts": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, excerpt_type TEXT, original_text TEXT, technique_analysis TEXT, emotional_impact TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # 章节开头/结尾范文
         "chapter_opening_ending_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, sample_position TEXT, original_text TEXT, technique_analysis TEXT, hook_type TEXT)",
         
         # 金句/名句
-        "memorable_quotes": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, quote_text TEXT, context TEXT, technique_analysis TEXT, quote_type TEXT)",
+        "memorable_quotes": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, quote_text TEXT, context TEXT, technique_analysis TEXT, quote_type TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # 多视角切换模式
         "pov_switching_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT, original_example TEXT)",
@@ -208,6 +208,20 @@ class DatabaseManager:
                 cursor.execute(f"CREATE TABLE {table_name} {schema}")
 
         conn.commit()
+        
+        # 迁移: 添加 writing_quality 列 (v2.0)
+        _WQ_TABLES = ["dialogue_samples", "description_samples", "transition_samples",
+                       "narrative_distance", "show_tell_patterns", "action_scene_samples",
+                       "climax_excerpts", "memorable_quotes"]
+        for t in _WQ_TABLES:
+            try:
+                cols = [row[1] for row in cursor.execute(f"PRAGMA table_info({t})").fetchall()]
+                if cols and "writing_quality" not in cols:
+                    cursor.execute(f"ALTER TABLE {t} ADD COLUMN writing_quality INTEGER DEFAULT 5")
+                    logger.info(f"✅ 迁移 {t}: 添加 writing_quality 列")
+            except Exception:
+                pass
+        
         print("✅ 数据库结构校验完毕。")
 
     def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
@@ -236,6 +250,20 @@ class DatabaseManager:
                 except Exception as e2:
                     logger.error(f"SQLite commit 重试失败: {e2}")
                     raise
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def transaction(self):
+        """事务上下文管理器 — 自动 BEGIN/COMMIT/ROLLBACK"""
+        conn = self.connect()
+        conn.execute("BEGIN")
+        try:
+            yield conn.cursor()
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
     def get_existing_ids(self, table: str, book_name: str, id_column: str = "chapter_id") -> set:
         """获取已存在的 ID 集合"""

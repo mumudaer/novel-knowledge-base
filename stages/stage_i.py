@@ -48,8 +48,8 @@ class StageI(BaseStage):
             chapter_word_counts.append(len(text))
             total_text_chars += len(text)
 
-            # 统计对话字数（引号内的内容）
-            dialogue_matches = re.findall(r'[""「『](.*?)[""」』]', text, re.DOTALL)
+            # 统计对话字数（引号内的内容：中文""「」『』+ ASCII "" + 单引号''）
+            dialogue_matches = re.findall(r'[""\u201c\u201d「『\u0022\u2018\u2019](.*?)[""\u201d\u201c」』\u0022\u2019\u2018]', text, re.DOTALL)
             dialogue_chars = sum(len(m) for m in dialogue_matches)
             total_dialogue_chars += dialogue_chars
 

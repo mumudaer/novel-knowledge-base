@@ -303,6 +303,10 @@ def smart_split_chapters(
                     logger.error(f"《{book_name}》 smart_split_chapters 第三步疑似死循环，强制退出！pos={pos}, len={len(text_content)}, max_chunk={max_chunk}")
                     break
                 cut_pos = _find_semantic_boundary(text_content, pos, max_chunk)
+                # 防护：极端输入（全是换行/标点）下可能 cut_pos 不前进
+                if cut_pos <= pos:
+                    cut_pos = pos + max(100, max_chunk // 10)
+                    logger.warning(f"《{book_name}》 smart_split 切分点无前进，强制推进至 {cut_pos}")
 
                 chunk_text = text_content[pos:cut_pos].strip()
                 if chunk_text and len(chunk_text) > 50:
@@ -343,9 +347,18 @@ def smart_split_chapters(
         net_split_length = split_length - total_overlap
         loss_rate = (original_length - net_split_length) / original_length
         if loss_rate > 0.05:
+            # 详细丢字分析
+            title_chars = sum(len(ch.get("id", "")) for ch in chapters if _STRONG_CHAPTER_RE.search(ch.get("text", "")) is None)
             logger.warning(
                 f"文本丢失警告: 《{book_name}》 丢失了 {loss_rate:.2%} "
-                f"(原始: {original_length}字, 切分后: {split_length}字, 重叠: {total_overlap}字)"
+                f"(原始: {original_length}字, 切分后: {split_length}字, 重叠: {total_overlap}字, "
+                f"净字数: {net_split_length}字, 丢失: {original_length - net_split_length}字, "
+                f"章节数: {len(final_chapters)}, 平均每块: {net_split_length//max(1,len(final_chapters))}字)"
+            )
+        elif loss_rate > 0.01:
+            logger.info(
+                f"文本轻微丢失: 《{book_name}》 {loss_rate:.2%} "
+                f"({original_length - net_split_length}字, 正常范围内)"
             )
 
     logger.info(f"《{book_name}》 切分结果: {len(final_chapters)} 个章节/块")
@@ -557,8 +570,8 @@ def save_manifest(data: Dict):
 # ===================== 哈希工具 =====================
 
 def generate_id(*parts: str) -> str:
-    """生成 MD5 哈希 ID"""
-    combined = "|".join(parts)
+    """生成 MD5 哈希 ID（JSON 序列化避免分隔符冲突）"""
+    combined = json.dumps(list(parts), ensure_ascii=False)
     return hashlib.md5(combined.encode()).hexdigest()
 
 

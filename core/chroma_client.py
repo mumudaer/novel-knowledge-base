@@ -179,8 +179,22 @@ class ChromaManager:
                     metadatas=batch_metas,
                 )
             except Exception as e:
-                logger.error(f"ChromaDB 批量写入失败: {e}")
-                raise
+                # 重试：ChromaDB PersistentClient 在并发写入时可能因锁冲突失败
+                import time as _time
+                for retry in range(3):
+                    _time.sleep(0.5 * (2 ** retry))
+                    try:
+                        collection.upsert(
+                            ids=batch_ids,
+                            documents=batch_docs,
+                            metadatas=batch_metas,
+                        )
+                        logger.warning(f"ChromaDB 批量写入 {collection_name} 重试 {retry+1} 次后成功")
+                        break
+                    except Exception:
+                        if retry == 2:
+                            logger.error(f"ChromaDB 批量写入失败 (重试3次): {e}")
+                            raise
 
     def query(
         self,

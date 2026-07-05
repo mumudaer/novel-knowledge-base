@@ -111,7 +111,7 @@ class StageA(BaseStage):
         for idx, chap in enumerate(pbar):
             chap_text = chap["text"]
 
-            if consecutive_fails >= 3:
+            if consecutive_fails >= 2:  # 2次连续失败即重置状态（避免污染下游）
                 fallback_state = {
                     name: last_char_state[name]
                     for name in protagonist_names
@@ -162,6 +162,12 @@ class StageA(BaseStage):
                     data.get("character_state", {})
                 )
                 chap["summary"] = data.get("chapter_summary", "")
+                # 短摘要告警：防止下游 Stage 基于空/极短摘要产生低质量数据
+                if len(chap["summary"]) < 50:
+                    logger.warning(
+                        f"⚠️ 章节 {chap.get('id', 'unknown')} 摘要过短 ({len(chap['summary'])}字)，"
+                        f"下游 Stage 分析质量将受影响"
+                    )
                 chap["key_events"] = data.get("key_events", [])
                 chap["scene_transitions"] = data.get("scene_transitions", {})
                 chap["information_flow"] = data.get("information_flow", {})

@@ -167,6 +167,7 @@ class OllamaClient:
         temperature: float = 0.2,
         stage: str = "A",
         max_retries: int = 3,
+        system: Optional[str] = None,
     ) -> str:
         """
         调用 Ollama API 进行对话
@@ -222,9 +223,14 @@ class OllamaClient:
         vram = get_vram_manager()
         vram.ensure_model_loaded(model)
 
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "stream": True,  # 流式模式：对长响应更稳定，不会因响应太大导致一次性返回超时
             "options": {
                 "temperature": temperature,

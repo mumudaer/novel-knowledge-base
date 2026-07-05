@@ -96,6 +96,16 @@ class StageC(BaseStage):
         if completed_ids:
             print(f"✅ [阶段C] 恢复断点：已完成 {len(completed_ids)} 章")
 
+        # 均匀间隔采样：文风全书一致，无需全量处理
+        import math
+        total = len(chapters)
+        sample_count = max(10, min(total, int(10 + 5 * math.sqrt(total / 100))))
+        if total > sample_count:
+            step = total / sample_count
+            sampled = [chapters[int(i * step)] for i in range(sample_count)]
+            logger.info(f"[阶段C] 均匀采样: {sample_count}/{total} 章")
+            chapters = sampled
+
         pending = [c for c in chapters if c["id"] not in completed_ids]
         if not pending:
             return success_list

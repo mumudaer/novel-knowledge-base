@@ -56,6 +56,18 @@ def bulk_upsert_to_chroma(
         documents.append(text)
         metadatas.append(metadata)
 
+    # 去重：同一批次中相同 ID 只保留第一条（ChromaDB upsert 不接受重复 ID）
+    if ids:
+        seen = set()
+        unique_ids, unique_docs, unique_metas = [], [], []
+        for i, doc_id in enumerate(ids):
+            if doc_id not in seen:
+                seen.add(doc_id)
+                unique_ids.append(doc_id)
+                unique_docs.append(documents[i])
+                unique_metas.append(metadatas[i])
+        ids, documents, metadatas = unique_ids, unique_docs, unique_metas
+
     if ids:
         try:
             chroma.upsert_batch(collection, ids, documents, metadatas)

@@ -319,8 +319,9 @@ def run_layer_2(
     book_name: str, category: str, author: str, stage_a_res: List[Dict], manifest: Dict
 ):
     """
-    Layer 2 (分析层): Stage B/C/D/I — 完全并行
-    依赖 Layer 1 的摘要数据，但各 Stage 之间无数据依赖
+    Layer 2 (分析层): Stage B/C/D/I — 分组串行
+    Group 1: I(统计) + B(7b) + C(7b) 并行
+    Group 2: D(14b) 单独运行（避免 7b/14b 并发导致模型切换开销和超时）
     """
     from stages.stage_b import StageB
     from stages.stage_c import StageC
@@ -344,40 +345,50 @@ def run_layer_2(
         print(f"  [Layer 2] 所有 Stage 已完成，跳过")
         return
 
-    print(f"  [Layer 2] 并行执行: {list(tasks.keys())}")
-
     def run_stage(stage_key, stage_obj, input_data):
         """在线程中运行单个 Stage"""
-        # Stage I 和 B/C/D 都使用 stage_a_res（它包含 text 字段）
         return stage_key, stage_obj.run(stage_a_res)
 
-    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        futures = {}
-        for stage_key, (input_type, stage_obj) in tasks.items():
-            future = executor.submit(run_stage, stage_key, stage_obj, input_type)
-            futures[future] = stage_key
+    def _execute_group(group_tasks):
+        """执行一组 Stage 并入库"""
+        if not group_tasks:
+            return
+        with ThreadPoolExecutor(max_workers=len(group_tasks)) as executor:
+            futures = {}
+            for stage_key, (input_type, stage_obj) in group_tasks.items():
+                future = executor.submit(run_stage, stage_key, stage_obj, input_type)
+                futures[future] = stage_key
 
-        for future in as_completed(futures):
-            stage_key = futures[future]
-            try:
-                key, result = future.result()
-                # 入库
-                stage_obj = tasks[key][1]
-                stats = stage_obj.insert(result)
-                logger.info(f"Stage {key} 入库完成: {stats}")
-                # 质量自检
-                stage_obj.run_quality_check(result)
-                mark_stage_complete(manifest, book_name, key)
-            except Exception as e:
-                logger.error(f"Stage {stage_key} 执行失败: {e}")
-                mark_stage_failed(manifest, book_name, stage_key, str(e))
+            for future in as_completed(futures):
+                stage_key = futures[future]
+                try:
+                    key, result = future.result()
+                    stage_obj = group_tasks[key][1]
+                    stats = stage_obj.insert(result)
+                    logger.info(f"Stage {key} 入库完成: {stats}")
+                    stage_obj.run_quality_check(result)
+                    mark_stage_complete(manifest, book_name, key)
+                except Exception as e:
+                    logger.error(f"Stage {stage_key} 执行失败: {e}")
+                    mark_stage_failed(manifest, book_name, stage_key, str(e))
+
+    # Group 1: I(统计) + B(7b) + C(7b) — 并行，无模型冲突
+    group1 = {k: v for k, v in tasks.items() if k in ("I", "B", "C")}
+    group2 = {k: v for k, v in tasks.items() if k == "D"}
+
+    if group1:
+        print(f"  [Layer 2] Group1 (I+B+C, 7b/统计): {list(group1.keys())}")
+        _execute_group(group1)
+    if group2:
+        print(f"  [Layer 2] Group2 (D, 14b): {list(group2.keys())}")
+        _execute_group(group2)
 
 
 def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest: Dict):
     """
-    Layer 3 (综合层): Stage E/F/G/H/O — 完全并行
-    依赖 Layer 1 的摘要数据和 Layer 2 的部分结果
-    Stage H 需要 Stage E 的结果，Stage O 仅需 Stage A 的摘要
+    Layer 3 (综合层): Stage E/F/G/H/O — 分组串行
+    Group 1: E(7b) 单独运行（H 依赖 E）
+    Group 2: F(14b)+G(14b)+O(14b)+H(14b) E完成后并行，避免 7b/14b 并发
     """
     from stages.stage_e import StageE
     from stages.stage_f import StageF
@@ -449,54 +460,56 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
         result = stage_obj.run(stage_a_res)
         return stage_key, stage_obj, result
 
-    with ThreadPoolExecutor(max_workers=max(len(tasks), 1)) as executor:
-        futures = {}
-        h_stage_obj = tasks.pop("H", None)  # 先把 H 拿出来，等 E 完成后再提交
+    def _insert_and_check(stage_key, stage_obj, result):
+        stats = stage_obj.insert(result)
+        logger.info(f"Stage {stage_key} 入库完成: {stats}")
+        stage_obj.run_quality_check(result)
+        mark_stage_complete(manifest, book_name, stage_key)
+        return stats
 
-        for key, stage_obj in tasks.items():
-            if key == "E":
-                future = executor.submit(run_stage_e, stage_obj)
-            else:
+    # Group 1: E(7b) 单独运行
+    e_task = tasks.pop("E", None)
+    stage_e_result_local = None
+    if e_task:
+        try:
+            result_key, stage_obj, result = run_stage_e(e_task)
+            stage_e_result_local = result
+            _insert_and_check(result_key, stage_obj, result)
+        except Exception as e:
+            logger.error(f"Stage E 执行失败: {e}")
+            mark_stage_failed(manifest, book_name, "E", str(e))
+
+    # Group 2: F(14b)+G(14b)+O(14b) 并行，H(14b) 依赖 E 结果最后执行
+    group2 = {k: v for k, v in tasks.items() if k in ("F", "G", "O")}
+    h_obj_final = tasks.get("H")
+    
+    if group2:
+        with ThreadPoolExecutor(max_workers=len(group2)) as executor:
+            futures = {}
+            for key, stage_obj in group2.items():
                 future = executor.submit(run_stage_generic, key, stage_obj)
-            futures[future] = key
-
-        # 等待 E/F/G 完成，同时捕获 E 的结果
-        stage_e_result_local = None
-        for future in as_completed(futures):
-            key = futures[future]
-            try:
-                result_key, stage_obj, result = future.result()
-                if result_key == "E":
-                    stage_e_result_local = result
-                stats = stage_obj.insert(result)
-                logger.info(f"Stage {result_key} 入库完成: {stats}")
-                # 质量自检
-                stage_obj.run_quality_check(result)
-                mark_stage_complete(manifest, book_name, result_key)
-            except Exception as e:
-                logger.error(f"Stage {key} 执行失败: {e}")
-                mark_stage_failed(manifest, book_name, key, str(e))
-
-        # E/F/G/O 全部完成后，运行 Stage H（带 E 的结果）
-        if h_stage_obj is not None:
-            # 检查 Stage E 是否已完成（E 失败或未运行时跳过 H）
-            e_complete = is_stage_complete(manifest, book_name, "E")
-            if not e_complete:
-                logger.warning(
-                    "Stage E 未完成，跳过 Stage H（下次运行时自动重试）"
-                )
-                mark_stage_skipped(manifest, book_name, "H", "dependency_E_not_complete")
-            else:
-                e_res_for_h = stage_e_result_local or stage_e_res or {}
+                futures[future] = key
+            for future in as_completed(futures):
+                key = futures[future]
                 try:
-                    h_key, h_obj, h_result = run_stage_h(h_stage_obj, e_res_for_h)
-                    stats = h_obj.insert(h_result)
-                    logger.info(f"Stage H 入库完成: {stats}")
-                    h_obj.run_quality_check(h_result)
-                    mark_stage_complete(manifest, book_name, "H")
+                    result_key, stage_obj, result = future.result()
+                    _insert_and_check(result_key, stage_obj, result)
                 except Exception as e:
-                    logger.error(f"Stage H 执行失败: {e}")
-                    mark_stage_failed(manifest, book_name, "H", str(e))
+                    logger.error(f"Stage {key} 执行失败: {e}")
+                    mark_stage_failed(manifest, book_name, key, str(e))
+
+    if h_obj_final is not None:
+        if not is_stage_complete(manifest, book_name, "E"):
+            logger.warning("Stage E 未完成，跳过 Stage H")
+            mark_stage_skipped(manifest, book_name, "H", "dependency_E_not_complete")
+        else:
+            e_res_for_h = stage_e_result_local or stage_e_res or {}
+            try:
+                h_key, h_obj, h_result = run_stage_h(h_obj_final, e_res_for_h)
+                _insert_and_check(h_key, h_obj, h_result)
+            except Exception as e:
+                logger.error(f"Stage H 执行失败: {e}")
+                mark_stage_failed(manifest, book_name, "H", str(e))
 
 
 # ===================== 后处理 =====================
@@ -739,6 +752,7 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
             ),
         )
         db.commit()
+        logger.info(f"book_metadata 入库完成: {book_name} ({category}, {total_chapters}章, {total_words}字)")
 
         print(
             f"\n{'='*20} 开始处理：《{book_name}》 (总章数:{total_chapters}) {'='*20}"
@@ -796,7 +810,7 @@ def main():
     parser.add_argument(
         "--novels-dir",
         type=str,
-        default=r"D:\WorkFish\Novel-Knowledge-Base\novels",
+        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "novels"),
         help="小说库根目录路径",
     )
     parser.add_argument(
@@ -932,6 +946,19 @@ def main():
         print("\n✅ 截断验证通过：0 次正文截断，所有章节完整喂给 LLM。")
     else:
         print(f"\n❌ 截断验证失败：{truncations} 次正文截断！存在正文损失！")
+
+    # 质量抽查提醒
+    total_completed = len(manifest.get("completed_books", []))
+    if total_completed > 0 and total_completed % 5 == 0:
+        print(f"\n{'='*60}")
+        print(f"📋 已完成 {total_completed} 本书，建议进行 Stage F 质量抽查：")
+        print(f"   1. 从每本书的 dialogue_samples / climax_excerpts / memorable_quotes")
+        print(f"      中各取 3 条 writing_quality=9-10 的样本，人工判断是否真的优秀")
+        print(f"   2. 如果 9-10 分样本里混了平庸内容 → 虚高，需调整 Stage F prompt")
+        print(f"   3. 如果 9-10 分确实优秀 → 评分系统有效，继续积累基准")
+        print(f"   抽查 SQL: SELECT writing_quality, original_text FROM dialogue_samples")
+        print(f"            WHERE book_name='X' ORDER BY writing_quality DESC LIMIT 3")
+        print(f"{'='*60}")
 
     print("\n小说库工业化构建全部执行完成！")
 
