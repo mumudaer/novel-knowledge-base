@@ -4,6 +4,7 @@ Stage A: 剧情摘要与人物状态追踪
 """
 import os
 import json
+import hashlib
 import logging
 from typing import List, Dict, Any, Tuple, Set
 from tqdm import tqdm
@@ -110,6 +111,7 @@ class StageA(BaseStage):
 
         for idx, chap in enumerate(pbar):
             chap_text = chap["text"]
+            result_chap = dict(chap)  # 独立副本，不修改输入 chapters
 
             if consecutive_fails >= 2:  # 2次连续失败即重置状态（避免污染下游）
                 fallback_state = {
@@ -158,21 +160,20 @@ class StageA(BaseStage):
                 if not data:
                     raise ValueError("解析失败")
 
-                chap["character_state"] = flatten_character_state(
+                result_chap["character_state"] = flatten_character_state(
                     data.get("character_state", {})
                 )
-                chap["summary"] = data.get("chapter_summary", "")
-                # 短摘要告警：防止下游 Stage 基于空/极短摘要产生低质量数据
-                if len(chap["summary"]) < 50:
+                result_chap["summary"] = data.get("chapter_summary", "")
+                if len(result_chap["summary"]) < 50:
                     logger.warning(
-                        f"⚠️ 章节 {chap.get('id', 'unknown')} 摘要过短 ({len(chap['summary'])}字)，"
+                        f"⚠️ 章节 {chap.get('id', 'unknown')} 摘要过短 ({len(result_chap['summary'])}字)，"
                         f"下游 Stage 分析质量将受影响"
                     )
-                chap["key_events"] = data.get("key_events", [])
-                chap["scene_transitions"] = data.get("scene_transitions", {})
-                chap["information_flow"] = data.get("information_flow", {})
-                chap["emotion_arc"] = data.get("emotion_arc", "")
-                chap["time_progression"] = data.get("time_progression", "")
+                result_chap["key_events"] = data.get("key_events", [])
+                result_chap["scene_transitions"] = data.get("scene_transitions", {})
+                result_chap["information_flow"] = data.get("information_flow", {})
+                result_chap["emotion_arc"] = data.get("emotion_arc", "")
+                result_chap["time_progression"] = data.get("time_progression", "")
                 consecutive_fails = 0
 
                 if finish_count + idx == 0 or (idx == 0 and not protagonist_names):
@@ -183,17 +184,17 @@ class StageA(BaseStage):
             except Exception as e:
                 consecutive_fails += 1
                 logger.warning(f"章节 {chap.get('id', 'unknown')} 处理失败: {e}")
-                chap["character_state"] = flatten_character_state({"旁白": "断层"})
-                chap["summary"] = "处理失败"
-                chap["key_events"] = []
-                chap["scene_transitions"] = {}
-                chap["information_flow"] = {}
-                chap["emotion_arc"] = ""
-                chap["time_progression"] = ""
+                result_chap["character_state"] = flatten_character_state({"旁白": "断层"})
+                result_chap["summary"] = "处理失败"
+                result_chap["key_events"] = []
+                result_chap["scene_transitions"] = {}
+                result_chap["information_flow"] = {}
+                result_chap["emotion_arc"] = ""
+                result_chap["time_progression"] = ""
 
-            last_char_state = chap["character_state"]
-            processed_chaps.append(chap)
-            recent_texts.append(chap["text"])
+            last_char_state = result_chap["character_state"]
+            processed_chaps.append(result_chap)
+            recent_texts.append(result_chap["text"])
             if len(recent_texts) > 3:
                 recent_texts.pop(0)
 
@@ -209,7 +210,8 @@ class StageA(BaseStage):
                         "data": [
                             {
                                 "id": c["id"],
-                                "summary": c["summary"],
+                                "text_hash": hashlib.md5(c.get("text", "")[:200].encode()).hexdigest(),
+                    "summary": c["summary"],
                                 "character_state": c["character_state"],
                                 "key_events": c.get("key_events", []),
                                 "scene_transitions": c.get("scene_transitions", {}),
@@ -231,7 +233,8 @@ class StageA(BaseStage):
                     "data": [
                         {
                             "id": c["id"],
-                            "summary": c["summary"],
+                            "text_hash": hashlib.md5(c.get("text", "")[:200].encode()).hexdigest(),
+                    "summary": c["summary"],
                             "character_state": c["character_state"],
                             "key_events": c.get("key_events", []),
                             "scene_transitions": c.get("scene_transitions", {}),
@@ -251,6 +254,7 @@ class StageA(BaseStage):
             "data": [
                 {
                     "id": c["id"],
+                    "text_hash": hashlib.md5(c.get("text", "")[:200].encode()).hexdigest(),
                     "summary": c["summary"],
                     "character_state": c["character_state"],
                     "key_events": c.get("key_events", []),

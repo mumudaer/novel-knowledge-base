@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import compress_state_to_text, find_quote_position_fast, generate_id
-from config.settings import STAGE_B_WORKERS
+from config.settings import STAGE_B_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,7 @@ def process_single_chapter_b(
     raw_resp = ollama_chat(prompt, 0.2, "B")
     res = safe_parse_json(raw_resp)
     if not res:
-        if raw_resp.count("{") > raw_resp.count("}"):
-            res = safe_parse_json(raw_resp + "}")
-        if not res:
-            raise Exception("JSON解析彻底失败")
+        raise Exception("JSON解析失败，safe_parse_json 无法修复")
 
     res.setdefault("narrative_skills", [])
     res.setdefault("scene_type", "未知")
@@ -81,7 +78,8 @@ class StageB(BaseStage):
         # 均匀间隔采样：技法全书一致，无需全量处理
         import math
         total = len(chapters)
-        sample_count = max(10, min(total, int(10 + 5 * math.sqrt(total / 100))))
+        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
+            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
         if total > sample_count:
             step = total / sample_count
             sampled = [chapters[int(i * step)] for i in range(sample_count)]

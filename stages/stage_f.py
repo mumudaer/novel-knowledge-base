@@ -15,7 +15,7 @@ from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
 from core.stage_result import StageResult
 from core.chroma_utils import bulk_upsert_to_chroma
-from config.settings import STAGE_F_WORKERS
+from config.settings import STAGE_F_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,8 @@ class StageF(BaseStage):
     def _select_sample_chapters(self, chapters):
         """区间择优采样：均分区间，每区间取评分最高 chunk"""
         total = len(chapters)
-        sample_count = max(10, min(total, int(10 + 5 * math.sqrt(total / 100))))
+        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
+            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
         if total <= sample_count:
             return chapters
         interval = total / sample_count

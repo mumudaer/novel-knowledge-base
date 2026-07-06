@@ -56,8 +56,9 @@ STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 
 # 上下文长度配置（根据模型能力和显存限制）
 # Stage A 从 3b 升级为 7b，上下文保持 16384（双并发时显存约 15GB，在安全范围内）
-# 7b KV cache: 56 KB/token → 20480 tokens ≈ 1.15 GB, model ~4.5 GB → 总计 ~5.7 GB
-OLLAMA_NUM_CTX_7B = 20480  # 容纳 10000 字章节 + 模板 (safe=11950 chars)
+# 7b KV cache: 56 KB/token → 12288 tokens ≈ 0.69 GB, model ~4.5 GB → 总计 ~5.2 GB
+# 3500字章节×1.5+模板3k+pred2k+buf500=10798 token, 12288 安全
+OLLAMA_NUM_CTX_7B = 12288  # 足够容纳 3500 字章节 + 模板，释放 0.9GB 供更多并发
 # 14b KV cache: 192 KB/token → 14336 tokens ≈ 2.8 GB, model ~9 GB → 总计 ~12 GB
 OLLAMA_NUM_CTX_14B = 14336  # 配合 SPLIT_THRESHOLD=3500, 每块≤3500字完整喂给 LLM (D-char budget=4909)
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
@@ -72,6 +73,11 @@ EMBEDDING_MODEL = "bge-m3"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"  # HuggingFace 模型名（sentence-transformers 使用）
 EMBEDDING_DIMENSION = 1024
 EMBEDDING_DEVICE = "cpu"  # 强制 CPU，避免与 LLM 推理抢占 GPU 显存
+
+# 采样公式: sample_count = STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+STAGE_SAMPLE_BASE = 10
+STAGE_SAMPLE_MULTIPLIER = 5
+STAGE_SAMPLE_DENOMINATOR = 100
 
 # 文本切分配置
 SPLIT_THRESHOLD = 3500  # 章节切分阈值（字符数），确保每块均匀且完整喂给 LLM
@@ -143,9 +149,9 @@ MODEL_CONFIG = {
     "D": {
         "model": STAGE_D_MODEL,
         "workers": STAGE_D_WORKERS,
-        "num_ctx": OLLAMA_NUM_CTX_14B,
+        "num_ctx": 16384,  # 覆盖 14b 默认 14336，配合 6144 输出需更大输入窗口
         "temperature": 0.1,
-        "num_predict": 4096,  # 33维度人物档案 + 世界观7维 + 编年史，重输出
+        "num_predict": 6144,  # 33维度人物档案 × 2-3人 + 世界观7维 + 编年史，重输出
     },
     "E": {
         "model": STAGE_E_MODEL,
@@ -171,9 +177,9 @@ MODEL_CONFIG = {
     "H": {
         "model": STAGE_H_MODEL,
         "workers": STAGE_H_WORKERS,
-        "num_ctx": OLLAMA_NUM_CTX_14B,
+        "num_ctx": 16384,  # 覆盖 14b 默认 14336，配合 6144 输出需更大输入窗口
         "temperature": 0.2,
-        "num_predict": 4096,  # 17种宏观结构(剧情线/情感/高潮/类型等)，重输出
+        "num_predict": 6144,  # 3组×5-6种宏观结构，嵌套JSON输出重
     },
     "J": {
         "model": STAGE_J_MODEL,

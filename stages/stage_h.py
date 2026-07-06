@@ -65,7 +65,7 @@ class StageH(BaseStage):
             return result
 
         # 构建全书摘要文本（超过阈值时均匀采样，确保开头/中间/结尾都有覆盖）
-        max_summary_chars = 5000  # 配合 num_ctx=14336, num_predict=2048, safe≈11788 tokens
+        max_summary_chars = 4000  # num_ctx=14336, num_predict=4096, safe≈6493, 模板~2000, 留4000给摘要
         summary_lines = [
             f"{ch.get('id', '未知章节')}: {ch.get('summary', '无摘要')}"
             for ch in stage_a_res

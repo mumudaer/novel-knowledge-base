@@ -392,7 +392,7 @@ class QualityChecker:
         for issue in issues:
             issue_id = generate_id(
                 issue.book_name, issue.stage, issue.chapter_id,
-                issue.description[:50], datetime.now().isoformat()
+                issue.description[:50]
             )
             try:
                 cursor.execute(

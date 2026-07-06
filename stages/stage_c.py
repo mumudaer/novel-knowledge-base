@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
-from config.settings import STAGE_C_WORKERS
+from config.settings import STAGE_C_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,8 @@ class StageC(BaseStage):
         # 均匀间隔采样：文风全书一致，无需全量处理
         import math
         total = len(chapters)
-        sample_count = max(10, min(total, int(10 + 5 * math.sqrt(total / 100))))
+        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
+            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
         if total > sample_count:
             step = total / sample_count
             sampled = [chapters[int(i * step)] for i in range(sample_count)]

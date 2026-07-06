@@ -170,6 +170,11 @@ def clean_novel_text(text: str) -> str:
     return text.strip()
 
 
+def sanitize_for_prompt(text: str) -> str:
+    """将正文中的 JSON 模板标记转为全角，防止混淆 LLM 输出格式"""
+    return text.replace('{', '｛').replace('}', '｝')
+
+
 def _find_semantic_boundary(text: str, start_pos: int, max_chunk: int) -> int:
     """
     在 [start_pos, start_pos + max_chunk] 范围内，寻找最佳语义切分点。

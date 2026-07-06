@@ -206,7 +206,14 @@ class OllamaClient:
                 head_budget_chars = int(head_budget_tokens / 1.5)  # 与估算一致，按 1.5 token/字
                 if head_budget_chars < 200:
                     head_budget_chars = 200  # 至少保留 200 字指令
-                prompt = head[:head_budget_chars] + "\n...(正文已截断)..." + tail
+                # 按语义边界截断：找到截断点最近的段落/句子结尾
+                trunc_pos = head_budget_chars
+                for boundary in ('\n\n', '\n', '。', '！', '？', '.', '!', '?'):
+                    pos = head.rfind(boundary, max(0, head_budget_chars - 500), head_budget_chars)
+                    if pos > head_budget_chars // 2:
+                        trunc_pos = pos + len(boundary)
+                        break
+                prompt = head[:trunc_pos] + "\n...(正文已截断)..." + tail
             else:
                 # 无 JSON schema，从尾部截断
                 max_chars = int(safe_token_limit / 1.5)

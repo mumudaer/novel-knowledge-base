@@ -93,31 +93,34 @@ class GraphManager:
         return GraphManager._ILLEGAL_XML_RE.sub("", text)
 
     def add_node(self, node_id: str, **attributes):
-        """添加节点"""
-        graph = self.load()
-        graph.add_node(node_id, **attributes)
+        """添加节点（线程安全）"""
+        with self._lock:
+            graph = self.load()
+            graph.add_node(node_id, **attributes)
 
     def add_edge(self, source: str, target: str, **attributes):
-        """添加边"""
-        graph = self.load()
-        graph.add_edge(source, target, **attributes)
+        """添加边（线程安全）"""
+        with self._lock:
+            graph = self.load()
+            graph.add_edge(source, target, **attributes)
 
     def safe_append_edge_attr(
         self, source: str, target: str, attr_name: str, attr_value: str
     ):
-        """安全地追加边的属性值（按逗号分割去重，避免子串误判）"""
-        if not attr_value:
-            return
-        graph = self.load()
+        """安全地追加边的属性值（线程安全）"""
+        with self._lock:
+            if not attr_value:
+                return
+            graph = self.load()
 
-        if not graph.has_edge(source, target):
-            graph.add_edge(source, target, **{attr_name: attr_value})
-        else:
-            old_val = str(graph[source][target].get(attr_name, ""))
-            old_list = [x.strip() for x in old_val.split(",") if x.strip()] if old_val else []
-            if attr_value not in old_list:
-                old_list.append(attr_value)
-            graph[source][target][attr_name] = ",".join(old_list)
+            if not graph.has_edge(source, target):
+                graph.add_edge(source, target, **{attr_name: attr_value})
+            else:
+                old_val = str(graph[source][target].get(attr_name, ""))
+                old_list = [x.strip() for x in old_val.split(",") if x.strip()] if old_val else []
+                if attr_value not in old_list:
+                    old_list.append(attr_value)
+                graph[source][target][attr_name] = ",".join(old_list)
 
 
 # 全局图谱管理器实例

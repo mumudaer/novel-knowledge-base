@@ -235,21 +235,20 @@ class DatabaseManager:
         conn.executemany(query, params_list)
 
     def commit(self):
-        """提交当前线程的事务（带单次重试 + 异常日志）"""
+        """提交当前线程的事务（3 次指数退避重试）"""
         conn = getattr(self._local, 'conn', None)
         if conn:
-            try:
-                conn.commit()
-            except Exception as e:
-                logger.error(f"SQLite commit 失败: {e}")
-                # 单次重试（等待可能的并发写入结束）
-                import time
-                time.sleep(0.5)
+            import time
+            for attempt in range(3):
                 try:
                     conn.commit()
-                except Exception as e2:
-                    logger.error(f"SQLite commit 重试失败: {e2}")
-                    raise
+                    return
+                except Exception as e:
+                    if attempt == 2:
+                        logger.error(f"SQLite commit 3次重试均失败: {e}")
+                        raise
+                    logger.warning(f"SQLite commit 失败 (尝试 {attempt+1}/3): {e}")
+                    time.sleep(0.5 * (2 ** attempt))
 
     from contextlib import contextmanager
 
