@@ -11,6 +11,8 @@ from core.utils import generate_id
 
 logger = logging.getLogger(__name__)
 
+_DIALOGUE_RE = re.compile(r'[""\u201c\u201d「『\u0022\u2018\u2019](.*?)[""\u201d\u201c」』\u0022\u2019\u2018]', re.DOTALL)
+
 
 class StageI(BaseStage):
     """Stage I: 纯统计模块（无需 LLM）"""
@@ -49,7 +51,7 @@ class StageI(BaseStage):
             total_text_chars += len(text)
 
             # 统计对话字数（引号内的内容：中文""「」『』+ ASCII "" + 单引号''）
-            dialogue_matches = re.findall(r'[""\u201c\u201d「『\u0022\u2018\u2019](.*?)[""\u201d\u201c」』\u0022\u2019\u2018]', text, re.DOTALL)
+            dialogue_matches = _DIALOGUE_RE.findall(text)
             dialogue_chars = sum(len(m) for m in dialogue_matches)
             total_dialogue_chars += dialogue_chars
 

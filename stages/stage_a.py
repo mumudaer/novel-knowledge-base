@@ -17,6 +17,7 @@ from core.utils import (
     compress_character_state,
     compress_state_to_text,
     flatten_character_state,
+    sanitize_for_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,8 +66,10 @@ class StageA(BaseStage):
                     chapters[i]["emotion_arc"] = item.get("emotion_arc", "")
                     chapters[i]["time_progression"] = item.get("time_progression", "")
                     processed_chaps.append(chapters[i])
-                finish_count = len(cached_data)
-                last_char_state = processed_chaps[-1]["character_state"]
+                # 校验缓存完整性：summary 必须非空
+                if all(chap.get("summary", "") for chap in processed_chaps):
+                    finish_count = len(cached_data)
+                    last_char_state = processed_chaps[-1]["character_state"]
                 inferred_category = cache.get("inferred_category", self.category)
                 protagonist_names = set(cache.get("protagonist_names", []))
                 recent_texts = [c["text"] for c in processed_chaps[-3:]]
@@ -110,7 +113,7 @@ class StageA(BaseStage):
         consecutive_fails = 0
 
         for idx, chap in enumerate(pbar):
-            chap_text = chap["text"]
+            chap_text = sanitize_for_prompt(chap["text"])
             result_chap = dict(chap)  # 独立副本，不修改输入 chapters
 
             if consecutive_fails >= 2:  # 2次连续失败即重置状态（避免污染下游）

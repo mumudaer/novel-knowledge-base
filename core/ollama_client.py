@@ -138,6 +138,7 @@ class OllamaClient:
 
             # 检查必需模型
             required_models = {
+                "qwen3.5:9b",
                 "qwen2.5:7b",
                 "qwen14b:latest",
             }
@@ -351,12 +352,18 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
     if not text:
         return None
 
+    # 检测是否被截断修复：原始文本括号数 vs 修复后括号数
+    orig_open = text.count('{') + text.count('}')
     raw = extract_raw_json(text)
     if not raw:
         return None
+    was_truncated = (raw.count('{') + raw.count('}')) != orig_open
 
     try:
-        return json.loads(raw)
+        result = json.loads(raw)
+        if was_truncated and isinstance(result, dict):
+            result["_truncated_by_safe_parse"] = True
+        return result
     except json.JSONDecodeError:
         # 尝试使用 json_repair 修复
         try:

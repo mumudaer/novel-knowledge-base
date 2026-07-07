@@ -3,6 +3,7 @@ Stage B: 写作技法与高潮点提取
 使用 qwen2.5:7b 模型，多线程提取每章的叙事技法、高潮/张力点、场景类型
 """
 import logging
+import math
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
@@ -43,7 +44,7 @@ def process_single_chapter_b(
     res.setdefault("scene_type", "未知")
     res.setdefault("climax_point", {"has_climax_point": False, "quote": "", "buildup_method": ""})
     res.setdefault("style_feature", {"tone": "无", "sentence_rhythm": "", "vocabulary_level": ""})
-    res["raw_text"] = text
+    res["_raw_text"] = text  # 临时字段，缓存前剥离
 
     if res["climax_point"].get("has_climax_point") and res["climax_point"].get("quote"):
         pos = find_quote_position_fast(text, res["climax_point"]["quote"])

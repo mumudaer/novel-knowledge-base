@@ -12,7 +12,7 @@ import sys
 
 # 模型分配策略（根据任务复杂度自动选择）
 # 注意：Stage A 从 3b 升级为 7b，摘要质量是全链路地基，3b 质量不足会污染下游所有 Stage
-STAGE_A_MODEL = "qwen2.5:7b"  # 中复杂度：摘要、状态追踪（升级为 7b 保证质量）
+STAGE_A_MODEL = "qwen3.5:9b"  # 升级 9b：摘要质量是全链路地基，9b 中文理解显著优于 7b
 STAGE_B_MODEL = "qwen2.5:7b"  # 中复杂度：技法提取
 STAGE_C_MODEL = "qwen2.5:7b"  # 中复杂度：文风指纹
 STAGE_D_MODEL = "qwen14b:latest"  # 高复杂度：世界观、人物深度提取
@@ -149,9 +149,9 @@ MODEL_CONFIG = {
     "D": {
         "model": STAGE_D_MODEL,
         "workers": STAGE_D_WORKERS,
-        "num_ctx": 16384,  # 覆盖 14b 默认 14336，配合 6144 输出需更大输入窗口
+        "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.1,
-        "num_predict": 6144,  # 33维度人物档案 × 2-3人 + 世界观7维 + 编年史，重输出
+        "num_predict": 4096,  # 33维度人物档案 + 世界观7维，小chunk(≤3500字)下够用
     },
     "E": {
         "model": STAGE_E_MODEL,

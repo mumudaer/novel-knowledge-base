@@ -25,7 +25,7 @@ class GraphManager:
         """初始化图谱管理器"""
         self.graph_path = graph_path or os.path.join(BASE_DIR, "knowledge_graph.graphml")
         self.graph: Optional[nx.DiGraph] = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def load(self) -> nx.DiGraph:
         """加载或创建知识图谱（线程安全）"""
