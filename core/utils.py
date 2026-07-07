@@ -190,7 +190,8 @@ def _find_semantic_boundary(text: str, start_pos: int, max_chunk: int) -> int:
     best_priority = 999
 
     # 从后往前搜索，优先在靠近 max_chunk 的位置切分（最大化块大小）
-    search_start = max(len(search_region) // 2, 100)  # 至少保留一半内容
+    # 从后往前搜索，扩大窗口到 67% 使分块更均匀
+    search_start = max(len(search_region) // 3, 100)
 
     for i in range(len(search_region) - 1, search_start - 1, -1):
         ch = search_region[i]
@@ -314,7 +315,7 @@ def smart_split_chapters(
                     logger.warning(f"《{book_name}》 smart_split 切分点无前进，强制推进至 {cut_pos}")
 
                 chunk_text = text_content[pos:cut_pos].strip()
-                if chunk_text and len(chunk_text) > 50:
+                if chunk_text and len(chunk_text) > 200:
                     final_chapters.append({
                         "id": f"{chap['id']}_{sub_index}",
                         "text": chunk_text,

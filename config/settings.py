@@ -58,9 +58,11 @@ STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 # Stage A 从 3b 升级为 7b，上下文保持 16384（双并发时显存约 15GB，在安全范围内）
 # 7b KV cache: 56 KB/token → 12288 tokens ≈ 0.69 GB, model ~4.5 GB → 总计 ~5.2 GB
 # 3500字章节×1.5+模板3k+pred2k+buf500=10798 token, 12288 安全
-OLLAMA_NUM_CTX_7B = 12288  # 足够容纳 3500 字章节 + 模板，释放 0.9GB 供更多并发
+OLLAMA_NUM_CTX_7B = 12288  # 7b/9b 通用上下文（足够容纳 3500 字章节 + 模板）
 # 14b KV cache: 192 KB/token → 14336 tokens ≈ 2.8 GB, model ~9 GB → 总计 ~12 GB
-OLLAMA_NUM_CTX_14B = 14336  # 配合 SPLIT_THRESHOLD=3500, 每块≤3500字完整喂给 LLM (D-char budget=4909)
+OLLAMA_NUM_CTX_14B = (
+    14336  # 配合 SPLIT_THRESHOLD=3500, 每块≤3500字完整喂给 LLM (D-char budget=4909)
+)
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
 OLLAMA_TIMEOUT = 300  # 超时时间（秒）（14b正常60-120s/次，300s已含2.5-5x余量）
 
@@ -80,7 +82,7 @@ STAGE_SAMPLE_MULTIPLIER = 5
 STAGE_SAMPLE_DENOMINATOR = 100
 
 # 文本切分配置
-SPLIT_THRESHOLD = 3500  # 章节切分阈值（字符数），确保每块均匀且完整喂给 LLM
+SPLIT_THRESHOLD = 5000  # 章节切分阈值（字符数），Stage D 模板精简后 14b@14336 可容纳
 SPLIT_OVERLAP = 200  # 二次切分时相邻块的重叠字符数，避免上下文断裂
 MATCH_THRESHOLD = 85  # 模糊匹配阈值
 

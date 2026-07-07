@@ -655,6 +655,36 @@ class StageF(BaseStage):
                 summary = summary[:150] + "..."
             return summary
 
+        # 质量筛选：按 writing_quality 排序，每种类型只保留 Top-N
+        def _filter_quality(samples, key_field, top_n):
+            if not samples or len(samples) <= top_n:
+                return samples
+            return sorted(samples, key=lambda x: x.get("writing_quality", 5), reverse=True)[:top_n]
+
+        # 按场景/类型分组过滤
+        dialogue_by_type = {}
+        for ds in results.get("dialogue_samples", []):
+            t = ds.get("scene_type", "未知")
+            dialogue_by_type.setdefault(t, []).append(ds)
+        results["dialogue_samples"] = [
+            s for samples in dialogue_by_type.values()
+            for s in _filter_quality(samples, "scene_type", 3)
+        ]
+        desc_by_type = {}
+        for ds in results.get("description_samples", []):
+            t = ds.get("description_type", "未知")
+            desc_by_type.setdefault(t, []).append(ds)
+        results["description_samples"] = [
+            s for samples in desc_by_type.values()
+            for s in _filter_quality(samples, "description_type", 3)
+        ]
+        results["transition_samples"] = _filter_quality(results.get("transition_samples", []), "transition_type", 5)
+        results["narrative_distance"] = _filter_quality(results.get("narrative_distance", []), "distance_type", 5)
+        results["show_tell_patterns"] = _filter_quality(results.get("show_tell_patterns", []), "pattern_type", 5)
+        results["action_scene_samples"] = _filter_quality(results.get("action_scene_samples", []), "action_type", 5)
+        results["climax_excerpts"] = _filter_quality(results.get("climax_excerpts", []), "excerpt_type", 5)
+        results["memorable_quotes"] = _filter_quality(results.get("memorable_quotes", []), "quote_type", 10)
+
         # 对话样本入库
         for ds in results.get("dialogue_samples", []):
             ds_id = generate_id(

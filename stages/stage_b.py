@@ -4,6 +4,7 @@ Stage B: 写作技法与高潮点提取
 """
 import logging
 import math
+import re
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
@@ -65,6 +66,19 @@ class StageB(BaseStage):
     def __init__(self, book_name: str, category: str):
         super().__init__("B", book_name, category)
 
+    @staticmethod
+    def _compute_chunk_score(text: str) -> float:
+        if not text:
+            return 0.0
+        total = len(text)
+        dialogue_chars = sum(len(m) for m in re.findall(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', text))
+        dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
+        emotion_count = sum(1 for c in text if c in ('！', '？', '…'))
+        emotion_density = min(1.0, emotion_count / max(total, 1) * 200)
+        unique_ratio = len(set(text)) / max(total, 1)
+        vocab_richness = min(1.0, unique_ratio * 8)
+        return dialogue_density * 0.4 + emotion_density * 0.3 + vocab_richness * 0.3
+
     def run(self, chapters: List[Dict], **kwargs) -> List[Dict]:
         """执行 Stage B"""
         print("=== 阶段二：多线程提取技法与高潮点 ===")
@@ -76,16 +90,24 @@ class StageB(BaseStage):
         if completed_ids:
             print(f"✅ [阶段B] 恢复断点：已完成 {len(completed_ids)} 章")
 
-        # 均匀间隔采样：技法全书一致，无需全量处理
-        import math
+        # 区间择优采样
         total = len(chapters)
         sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
             STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
         if total > sample_count:
-            step = total / sample_count
-            sampled = [chapters[int(i * step)] for i in range(sample_count)]
-            logger.info(f"[阶段B] 均匀采样: {sample_count}/{total} 章")
-            chapters = sampled
+            interval = total / sample_count
+            selected = []
+            for i in range(sample_count):
+                start = int(i * interval)
+                end = int((i + 1) * interval) if i < sample_count - 1 else total
+                best_idx, best_score = start, -1
+                for j in range(start, min(end, total)):
+                    score = self._compute_chunk_score(chapters[j].get("text", ""))
+                    if score > best_score:
+                        best_score, best_idx = score, j
+                selected.append(chapters[best_idx])
+            logger.info(f"[阶段B] 区间择优采样: {sample_count}/{total} 章")
+            chapters = selected
 
         pending = [c for c in chapters if c["id"] not in completed_ids]
         if not pending:

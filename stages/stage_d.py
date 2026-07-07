@@ -5,6 +5,7 @@ Stage D: 世界观与人物深度自动提取（重做版）
 """
 
 import json
+import math
 import logging
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,34 +29,22 @@ class StageD(BaseStage):
 
     def _select_sample_chapters(self, chapters: List[Dict]) -> List[Dict]:
         """
-        智能采样策略：选取代表性章节
-        - 首章（第1章）
-        - 尾章（最后1章）
-        - 每10章取1章
-        - 信息密度最高的章节（基于摘要长度估算）
+        采样策略：首章 + 尾章 + 均匀间隔
+        - 首尾保证世界观建立和收束不丢失
+        - 均匀间隔保证全书覆盖
         """
         if len(chapters) <= 10:
             return chapters
 
         sampled_indices = set()
+        sampled_indices.add(0)                    # 首章
+        sampled_indices.add(len(chapters) - 1)     # 尾章
 
-        # 首章
-        sampled_indices.add(0)
-
-        # 尾章
-        sampled_indices.add(len(chapters) - 1)
-
-        # 每10章取1章
-        for i in range(0, len(chapters), 10):
-            sampled_indices.add(i)
-
-        # 信息密度最高的前20%章节（基于文本长度）
-        chapter_lengths = [
-            (i, len(chap.get("text", ""))) for i, chap in enumerate(chapters)
-        ]
-        chapter_lengths.sort(key=lambda x: x[1], reverse=True)
-        top_20_percent = max(1, len(chapters) // 5)
-        for i, _ in chapter_lengths[:top_20_percent]:
+        # 均匀间隔：目标采样数用开方公式
+        import math
+        target = max(10, min(len(chapters), int(10 + 5 * math.sqrt(len(chapters) / 100))))
+        step = max(2, (len(chapters) - 2) // (target - 2))
+        for i in range(step, len(chapters) - 1, step):
             sampled_indices.add(i)
 
         # 按顺序返回
@@ -204,10 +193,10 @@ class StageD(BaseStage):
         return result
 
     def _extract_character_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
-        """提取人物组：character_profiles（33维度）"""
+        """提取人物核心档案（14字段，从单chunk可准确判断）"""
         result = {"character_profiles": []}
 
-        prompt = f"""你是顶级的人物塑造大师。请从以下章节文本中深度提取【人物档案（33维度）】。
+        prompt = f"""你是顶级的人物塑造大师。请从以下章节文本中提取【人物核心档案】。
 
 【书名】{self.book_name} 【作者】{self.author} 【分类】{self.category}
 【章节】{chap_id}
@@ -221,38 +210,21 @@ class StageD(BaseStage):
       "name": "人物名",
       "role_type": "角色定位(主角/核心配角/对立面/导师/群像代表等)",
       "appearance": "视觉记忆点(发色/疤痕/标志性穿搭/气质，50字内)",
-      "quirks": "标志性口癖/微表情/下意识动作/心理防御机制",
+      "quirks": "标志性口癖/微表情/下意识动作",
       "identity": "身份/职业/阵营/社会阶层",
       "motivation": "核心动机/终极目标/核心欲望",
       "internal_conflict": "内心冲突/人物弧光",
-      "fatal_flaw": "性格缺陷/悲剧根源",
-      "symbolism": "象征意义/社会隐喻(限30字)",
       "personality": "性格底色/优缺点/行事底线",
       "relation_to_mc": "与主角/核心视角的初始关系",
-      "relations_to_others": "与其他重要配角的社会与情感羁绊",
-      "climax_or_fate": "高光时刻预设/宿命结局",
-      "background": "前史/背景故事/原生家庭影响",
-      "desire_vs_need": "欲望vs需求(表面想要的vs真正需要的，50字内)",
-      "secrets": "人物的秘密(隐藏的过去、不可告人的目的，50字内)",
-      "fears": "人物的恐惧(最害怕什么、心理阴影，50字内)",
-      "social_masks": "社交面具(在不同关系中的不同表现，50字内)",
-      "growth_cost": "成长代价(获得什么、失去什么，50字内)",
+      "abilities": "能力体系(技能/天赋/战斗风格，50字内)",
       "speech_samples": "语言风格样本(口头禅、用词习惯的原文摘录，100字内)",
       "behavior_samples": "行为标志样本(习惯性动作的原文描写，100字内)",
-      "relationship_evolution": "人物关系动态演变(100字内)",
-      "abilities": "能力体系(技能/天赋/战斗风格，50字内)",
-      "arc_trajectory": "人物弧光轨迹(起点→转折→终点，50字内)",
-      "internal_dilemma": "内心两难困境(两个互斥的选择及其代价，50字内)",
-      "decision_pattern": "决策模式(冲动型/理性分析型/从众型/直觉型，50字内)",
-      "cognitive_bias": "认知偏差(对世界/他人的错误认知、偏见，50字内)",
-      "transformation_trigger": "转变触发器(什么事件触发了人物转变，50字内)",
-      "contrast_design": "对比设计(与同类型角色的差异设计，50字内)",
-      "archetype_label": "角色原型标签(如:守护驱动型主角/代价成长型主角/秩序洁癖型反派/镜像型大反派/韧性反击型女主/团宠守护者/情报源配角/牺牲品配角，30字内)",
-      "writing_anti_patterns": "忌讳写法/毒点(这类角色容易写崩的地方，如:动机弱化/智谋降维/情感套路化，50字内)"
+      "climax_or_fate": "高光时刻预设/宿命结局",
+      "background": "前史/背景故事/原生家庭影响"
     }}
   ]
 }}
-(⚠️核心要求：必须提取性格缺陷(Fatal Flaw)和象征意义！必须提取欲望vs需求、秘密、恐惧、社交面具、成长代价！必须提取语言风格样本和行为标志样本（从原文摘录）！必须提取能力体系、弧光轨迹、两难困境！必须提取决策模式、认知偏差、转变触发器、对比设计！禁止反引号)"""
+(⚠️核心要求：必须从原文摘录 speech_samples 和 behavior_samples！禁止反引号)"""
 
         try:
             resp = ollama_chat(prompt, 0.1, "D")
@@ -272,36 +244,13 @@ class StageD(BaseStage):
                                 "identity": cp.get("identity", ""),
                                 "motivation": cp.get("motivation", ""),
                                 "internal_conflict": cp.get("internal_conflict", ""),
-                                "fatal_flaw": cp.get("fatal_flaw", ""),
-                                "symbolism": cp.get("symbolism", ""),
-                                "climax_or_fate": cp.get("climax_or_fate", ""),
                                 "personality": cp.get("personality", ""),
                                 "relation_to_mc": cp.get("relation_to_mc", "未知"),
-                                "relations_to_others": cp.get(
-                                    "relations_to_others", ""
-                                ),
-                                "background": cp.get("background", ""),
-                                "desire_vs_need": cp.get("desire_vs_need", ""),
-                                "secrets": cp.get("secrets", ""),
-                                "fears": cp.get("fears", ""),
-                                "social_masks": cp.get("social_masks", ""),
-                                "growth_cost": cp.get("growth_cost", ""),
+                                "abilities": cp.get("abilities", ""),
                                 "speech_samples": cp.get("speech_samples", ""),
                                 "behavior_samples": cp.get("behavior_samples", ""),
-                                "relationship_evolution": cp.get(
-                                    "relationship_evolution", ""
-                                ),
-                                "abilities": cp.get("abilities", ""),
-                                "arc_trajectory": cp.get("arc_trajectory", ""),
-                                "internal_dilemma": cp.get("internal_dilemma", ""),
-                                "decision_pattern": cp.get("decision_pattern", ""),
-                                "cognitive_bias": cp.get("cognitive_bias", ""),
-                                "transformation_trigger": cp.get(
-                                    "transformation_trigger", ""
-                                ),
-                                "contrast_design": cp.get("contrast_design", ""),
-                                "archetype_label": cp.get("archetype_label", ""),
-                                "writing_anti_patterns": cp.get("writing_anti_patterns", ""),
+                                "climax_or_fate": cp.get("climax_or_fate", ""),
+                                "background": cp.get("background", ""),
                             }
                         )
         except Exception as e:
@@ -310,6 +259,80 @@ class StageD(BaseStage):
                 stage_result.add_failure(chap_id, str(e), "D-character")
         
         return result
+
+    def _aggregate_characters(self, profiles: List[Dict]) -> Dict[str, tuple]:
+        """按人物名聚合核心字段，返回 {name: (core_text, chapter_refs)}"""
+        agg = {}
+        for p in profiles:
+            name = p.get("name", "")
+            if not name:
+                continue
+            if name not in agg:
+                agg[name] = {"texts": [], "chapters": []}
+            agg[name]["chapters"].append(p)
+            agg[name]["texts"].append(
+                f"定位:{p.get('role_type','')}|外貌:{p.get('appearance','')}|"
+                f"口癖:{p.get('quirks','')}|身份:{p.get('identity','')}|"
+                f"动机:{p.get('motivation','')}|内心冲突:{p.get('internal_conflict','')}|"
+                f"性格:{p.get('personality','')}|与主角关系:{p.get('relation_to_mc','')}|"
+                f"能力:{p.get('abilities','')}|语言:{p.get('speech_samples','')}|"
+                f"行为:{p.get('behavior_samples','')}|高光:{p.get('climax_or_fate','')}|"
+                f"前史:{p.get('background','')}"
+            )
+        return {name: (" | ".join(d["texts"]), d["chapters"]) for name, d in agg.items()}
+
+    def _extend_character(self, name: str, core_text: str, chapters: List[Dict]):
+        """基于聚合核心档案提取扩展19字段，回填到所有该人物的记录中"""
+        if not core_text.strip():
+            return
+        prompt = f"""你是顶级的人物塑造大师。请根据以下《{self.book_name}》({self.category})中人物【{name}】的全书核心档案，深度分析扩展维度。
+
+【核心档案】
+{core_text[:5000]}
+
+请输出纯 JSON 格式：
+{{
+  "fatal_flaw": "性格缺陷/悲剧根源(50字内，无则留空)",
+  "symbolism": "象征意义/社会隐喻(限30字，无则留空)",
+  "relations_to_others": "与其他重要配角的社会与情感羁绊(100字内，无则留空)",
+  "desire_vs_need": "欲望vs需求(表面想要的vs真正需要的，50字内，无则留空)",
+  "secrets": "人物的秘密(隐藏的过去、不可告人的目的，50字内，无则留空)",
+  "fears": "人物的恐惧(最害怕什么、心理阴影，50字内，无则留空)",
+  "social_masks": "社交面具(在不同关系中的不同表现，50字内，无则留空)",
+  "growth_cost": "成长代价(获得什么、失去什么，50字内，无则留空)",
+  "relationship_evolution": "人物关系动态演变(100字内，无则留空)",
+  "arc_trajectory": "人物弧光轨迹(起点→转折→终点，50字内，无则留空)",
+  "internal_dilemma": "内心两难困境(两个互斥的选择及其代价，50字内，无则留空)",
+  "decision_pattern": "决策模式(冲动型/理性分析型/从众型/直觉型，50字内，无则留空)",
+  "cognitive_bias": "认知偏差(对世界/他人的错误认知、偏见，50字内，无则留空)",
+  "transformation_trigger": "转变触发器(什么事件触发了人物转变，50字内，无则留空)",
+  "contrast_design": "对比设计(与同类型角色的差异设计，50字内，无则留空)",
+  "archetype_label": "角色原型标签(30字内，无则留空)",
+  "writing_anti_patterns": "忌讳写法/毒点(50字内，无则留空)"
+}}
+(⚠️所有字段无则留空，禁止编造信息。禁止反引号)"""
+        resp = ollama_chat(prompt, 0.1, "D")
+        data = safe_parse_json(resp)
+        if not data:
+            return
+        for chap in chapters:
+            chap["fatal_flaw"] = data.get("fatal_flaw", "")
+            chap["symbolism"] = data.get("symbolism", "")
+            chap["relations_to_others"] = data.get("relations_to_others", "")
+            chap["desire_vs_need"] = data.get("desire_vs_need", "")
+            chap["secrets"] = data.get("secrets", "")
+            chap["fears"] = data.get("fears", "")
+            chap["social_masks"] = data.get("social_masks", "")
+            chap["growth_cost"] = data.get("growth_cost", "")
+            chap["relationship_evolution"] = data.get("relationship_evolution", "")
+            chap["arc_trajectory"] = data.get("arc_trajectory", "")
+            chap["internal_dilemma"] = data.get("internal_dilemma", "")
+            chap["decision_pattern"] = data.get("decision_pattern", "")
+            chap["cognitive_bias"] = data.get("cognitive_bias", "")
+            chap["transformation_trigger"] = data.get("transformation_trigger", "")
+            chap["contrast_design"] = data.get("contrast_design", "")
+            chap["archetype_label"] = data.get("archetype_label", "")
+            chap["writing_anti_patterns"] = data.get("writing_anti_patterns", "")
 
     def _process_single_chapter(self, chap: Dict) -> Dict[str, List[Dict]]:
         """
@@ -412,6 +435,18 @@ class StageD(BaseStage):
                     raise
 
             self.save_cache({"data": completed_items})
+
+        # Phase 2: 聚合核心档案 → 提取扩展19字段
+        char_profiles = result.get("character_profiles", [])
+        if char_profiles:
+            aggregated = self._aggregate_characters(char_profiles)
+            if aggregated:
+                logger.info(f"[阶段D] Phase2: 提取 {len(aggregated)} 个人物的扩展字段...")
+                for name, (core_text, chapters) in aggregated.items():
+                    try:
+                        self._extend_character(name, core_text, chapters)
+                    except Exception as e:
+                        logger.warning(f"⚠️ [阶段D] 人物 {name} 扩展提取失败: {e}")
 
         logger.info(
             f"✅ [阶段D战报] 世界观: {len(result['world_settings'])} 条, "
