@@ -830,7 +830,15 @@ def main():
         type=str,
         help="只处理指定书名的小说（支持部分匹配）",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="全量处理所有 chunk，不跳过任何块（适用于需要完整样本库的小说）",
+    )
     args = parser.parse_args()
+    if args.full:
+        os.environ["NOVEL_KB_FULL_SAMPLE"] = "1"
+        print("🚀 --full 模式：全量处理所有 chunk，不跳过任何块")
 
     NOVELS_ROOT_DIR = args.novels_dir
 

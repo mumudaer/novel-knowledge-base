@@ -2,13 +2,20 @@
 Stage C: 文风指纹与感官映射提取
 使用 qwen2.5:7b 模型，多线程提取文风指纹、感官映射、经典摘录
 """
+
 import logging
+import math
 import re
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
-from config.settings import STAGE_C_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
+from config.settings import (
+    STAGE_C_WORKERS,
+    STAGE_SAMPLE_BASE,
+    STAGE_SAMPLE_MULTIPLIER,
+    STAGE_SAMPLE_DENOMINATOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +70,17 @@ def process_single_chapter_c(
     # 清洗 author_fingerprint，过滤非字符串项
     fp = res.get("author_fingerprint", {})
     if isinstance(fp, dict):
-        for key in ["preferred_verbs", "preferred_adjectives", "environmental_imagery", "signature_transitions"]:
+        for key in [
+            "preferred_verbs",
+            "preferred_adjectives",
+            "environmental_imagery",
+            "signature_transitions",
+        ]:
             val = fp.get(key, [])
             if isinstance(val, list):
-                fp[key] = [str(v) for v in val if isinstance(v, (str, int, float, bool))]
+                fp[key] = [
+                    str(v) for v in val if isinstance(v, (str, int, float, bool))
+                ]
             else:
                 fp[key] = []
     else:
@@ -98,9 +112,19 @@ class StageC(BaseStage):
 
         # 均匀间隔采样：文风全书一致，无需全量处理
         import math
+
         total = len(chapters)
-        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
-            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
+        sample_count = max(
+            STAGE_SAMPLE_BASE,
+            min(
+                total,
+                int(
+                    STAGE_SAMPLE_BASE
+                    + STAGE_SAMPLE_MULTIPLIER
+                    * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+                ),
+            ),
+        )
         if total > sample_count:
             step = total / sample_count
             sampled = [chapters[int(i * step)] for i in range(sample_count)]
@@ -123,7 +147,12 @@ class StageC(BaseStage):
     def insert(self, results: List[Dict]) -> Dict[str, int]:
         """将 Stage C 结果写入数据库"""
         cursor = self.db.connect().cursor()
-        stats = {"fingerprints_db": 0, "sensory_db": 0, "sensory_chroma": 0, "excerpts_chroma": 0}
+        stats = {
+            "fingerprints_db": 0,
+            "sensory_db": 0,
+            "sensory_chroma": 0,
+            "excerpts_chroma": 0,
+        }
 
         blacklist = {"无", "未知", "暂无", "没有", "null", "none", "未提供"}
 
@@ -154,7 +183,9 @@ class StageC(BaseStage):
 
             # 感官映射入库
             for sm in res.get("sensory_mappings", []):
-                sm_id = generate_id(res["book_name"], res["chapter_id"], sm.get("emotion", ""))
+                sm_id = generate_id(
+                    res["book_name"], res["chapter_id"], sm.get("emotion", "")
+                )
                 cursor.execute(
                     "INSERT OR REPLACE INTO sensory_mappings VALUES (?,?,?,?,?,?,?)",
                     (
@@ -173,14 +204,20 @@ class StageC(BaseStage):
         sen_ids, sen_docs, sen_metas = [], [], []
         for res in results:
             for sm in res.get("sensory_mappings", []):
-                sid = generate_id(res["book_name"], res["chapter_id"], sm.get("emotion", ""))
+                sid = generate_id(
+                    res["book_name"], res["chapter_id"], sm.get("emotion", "")
+                )
                 sen_ids.append(sid)
-                sen_docs.append(f"情绪:{sm.get('emotion', '')}\n展示:{sm.get('show_not_tell', '')}\n分析:{sm.get('analysis', '')}")
-                sen_metas.append({
-                    "book_name": res["book_name"],
-                    "category": res["category"],
-                    "emotion": sm.get("emotion", ""),
-                })
+                sen_docs.append(
+                    f"情绪:{sm.get('emotion', '')}\n展示:{sm.get('show_not_tell', '')}\n分析:{sm.get('analysis', '')}"
+                )
+                sen_metas.append(
+                    {
+                        "book_name": res["book_name"],
+                        "category": res["category"],
+                        "emotion": sm.get("emotion", ""),
+                    }
+                )
         if sen_ids:
             self.chroma.upsert_batch("sensory_details", sen_ids, sen_docs, sen_metas)
             stats["sensory_chroma"] = len(sen_ids)
@@ -200,15 +237,19 @@ class StageC(BaseStage):
                         f"跳过乱码摘录: chapter={res.get('chapter_id', '未知')}, text={excerpt_text[:50]}..."
                     )
                     continue
-                eid = generate_id(res["book_name"], res["chapter_id"], exc.get("style_tag", ""))
+                eid = generate_id(
+                    res["book_name"], res["chapter_id"], exc.get("style_tag", "")
+                )
                 exc_ids.append(eid)
                 exc_docs.append(exc["excerpt_text"])
-                exc_metas.append({
-                    "book_name": res["book_name"],
-                    "category": res["category"],
-                    "scene_type": exc.get("scene_type", ""),
-                    "style_tag": exc.get("style_tag", ""),
-                })
+                exc_metas.append(
+                    {
+                        "book_name": res["book_name"],
+                        "category": res["category"],
+                        "scene_type": exc.get("scene_type", ""),
+                        "style_tag": exc.get("style_tag", ""),
+                    }
+                )
         if exc_ids:
             self.chroma.upsert_batch("classic_excerpts", exc_ids, exc_docs, exc_metas)
             stats["excerpts_chroma"] = len(exc_ids)

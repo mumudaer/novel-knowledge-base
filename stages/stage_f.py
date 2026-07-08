@@ -4,6 +4,7 @@ Stage F: 对话/描写/动作专项样本库
 """
 
 import json
+import os
 import re
 import math
 import logging
@@ -15,7 +16,12 @@ from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
 from core.stage_result import StageResult
 from core.chroma_utils import bulk_upsert_to_chroma
-from config.settings import STAGE_F_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
+from config.settings import (
+    STAGE_F_WORKERS,
+    STAGE_SAMPLE_BASE,
+    STAGE_SAMPLE_MULTIPLIER,
+    STAGE_SAMPLE_DENOMINATOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +38,15 @@ class StageF(BaseStage):
         if not text:
             return 0.0
         total = len(text)
-        dialogue_chars = sum(len(m) for m in re.findall(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', text))
+        dialogue_chars = sum(
+            len(m)
+            for m in re.findall(
+                r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]',
+                text,
+            )
+        )
         dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
-        emotion_count = sum(1 for c in text if c in ('！', '？', '…'))
+        emotion_count = sum(1 for c in text if c in ("！", "？", "…"))
         emotion_density = min(1.0, emotion_count / max(total, 1) * 200)
         unique_ratio = len(set(text)) / max(total, 1)
         vocab_richness = min(1.0, unique_ratio * 8)
@@ -43,8 +55,17 @@ class StageF(BaseStage):
     def _select_sample_chapters(self, chapters):
         """区间择优采样：均分区间，每区间取评分最高 chunk"""
         total = len(chapters)
-        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
-            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
+        sample_count = max(
+            STAGE_SAMPLE_BASE,
+            min(
+                total,
+                int(
+                    STAGE_SAMPLE_BASE
+                    + STAGE_SAMPLE_MULTIPLIER
+                    * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+                ),
+            ),
+        )
         if total <= sample_count:
             return chapters
         interval = total / sample_count
@@ -60,7 +81,9 @@ class StageF(BaseStage):
             selected.append(chapters[best_idx])
         return selected
 
-    def _extract_basic_samples(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
+    def _extract_basic_samples(
+        self, text: str, chap_id: str, stage_result=None
+    ) -> Dict[str, List[Dict]]:
         """批次1：提取基础样本（对话+描写+转场）"""
         result = {
             "dialogue_samples": [],
@@ -177,7 +200,9 @@ class StageF(BaseStage):
 
         return result
 
-    def _extract_advanced_samples(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
+    def _extract_advanced_samples(
+        self, text: str, chap_id: str, stage_result=None
+    ) -> Dict[str, List[Dict]]:
         """批次2：提取进阶分析（叙事距离+Show/Tell+动作场景+高潮段落+金句）"""
         result = {
             "narrative_distance": [],
@@ -421,24 +446,33 @@ class StageF(BaseStage):
 
         # 数据键列表（用于合并结果）
         DATA_KEYS = [
-            "dialogue_samples", "description_samples", "transition_samples",
-            "narrative_distance", "show_tell_patterns", "action_scene_samples",
-            "climax_excerpts", "memorable_quotes", "chapter_opening_ending_samples",
+            "dialogue_samples",
+            "description_samples",
+            "transition_samples",
+            "narrative_distance",
+            "show_tell_patterns",
+            "action_scene_samples",
+            "climax_excerpts",
+            "memorable_quotes",
+            "chapter_opening_ending_samples",
         ]
 
-        result = {
-            key: [] for key in DATA_KEYS
-        }
+        result = {key: [] for key in DATA_KEYS}
         result["style_summaries"] = []
         result["_chapter_summaries"] = {
             chap.get("id", ""): chap.get("summary", "")
-            for chap in chapters if chap.get("id")
+            for chap in chapters
+            if chap.get("id")
         }
 
         # 断点恢复：加载已完成的章节结果
         cache = self.load_cache()
         completed_items = cache.get("data", []) if cache else []
-        completed_ids = {item.get("_chapter_id", "") for item in completed_items if item.get("_chapter_id")}
+        completed_ids = {
+            item.get("_chapter_id", "")
+            for item in completed_items
+            if item.get("_chapter_id")
+        }
 
         # 合并缓存数据到主结果
         for item in completed_items:
@@ -446,30 +480,44 @@ class StageF(BaseStage):
                 result[key].extend(item.get(key, []))
 
         if completed_ids:
-            logger.info(f"✅ [阶段F] 恢复断点：已完成 {len(completed_ids)}/{len(chapters)} 章")
+            logger.info(
+                f"✅ [阶段F] 恢复断点：已完成 {len(completed_ids)}/{len(chapters)} 章"
+            )
 
-        # 区间择优采样 + 过滤已完成
-        sampled = self._select_sample_chapters(chapters)
-        logger.info(f"[阶段F] 区间择优采样: {len(sampled)}/{len(chapters)} 章 (采样率 {len(sampled)*100//max(len(chapters),1)}%)")
+        # 区间择优采样（--full 模式下全量处理）
+        if os.environ.get("NOVEL_KB_FULL_SAMPLE"):
+            sampled = chapters
+            logger.info(f"[阶段F] --full 全量模式: {len(chapters)} 章")
+        else:
+            sampled = self._select_sample_chapters(chapters)
+            logger.info(
+                f"[阶段F] 区间择优采样: {len(sampled)}/{len(chapters)} 章 (采样率 {len(sampled)*100//max(len(chapters),1)}%)"
+            )
         pending = [c for c in sampled if c.get("id") not in completed_ids]
         if not pending:
             logger.info(f"[阶段F] 所有章节已处理完毕")
         else:
             # 并行处理未完成章节
             workers = min(STAGE_F_WORKERS, len(pending))
-            logger.info(f"[阶段F] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 章")
+            logger.info(
+                f"[阶段F] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 章"
+            )
 
             processed_count = 0
             checkpoint_interval = 10  # 每 10 章保存一次断点
 
             with ThreadPoolExecutor(max_workers=max(workers, 1)) as executor:
                 futures = {
-                    executor.submit(self._process_single_chapter, chap): chap.get("id", "unknown")
+                    executor.submit(self._process_single_chapter, chap): chap.get(
+                        "id", "unknown"
+                    )
                     for chap in pending
                 }
 
                 try:
-                    for future in tqdm(as_completed(futures), total=len(futures), desc="提取样本库"):
+                    for future in tqdm(
+                        as_completed(futures), total=len(futures), desc="提取样本库"
+                    ):
                         chap_id = futures[future]
                         try:
                             chapter_result = future.result()
@@ -487,7 +535,9 @@ class StageF(BaseStage):
                             stage_result.add_failure(chap_id, str(e), "F")
                 except KeyboardInterrupt:
                     # 中断时立即保存进度
-                    logger.info(f"[阶段F] 用户中断，保存进度 ({len(completed_items)} 章已完成)...")
+                    logger.info(
+                        f"[阶段F] 用户中断，保存进度 ({len(completed_items)} 章已完成)..."
+                    )
                     self.save_cache({"data": completed_items})
                     raise
 
@@ -659,7 +709,9 @@ class StageF(BaseStage):
         def _filter_quality(samples, key_field, top_n):
             if not samples or len(samples) <= top_n:
                 return samples
-            return sorted(samples, key=lambda x: x.get("writing_quality", 5), reverse=True)[:top_n]
+            return sorted(
+                samples, key=lambda x: x.get("writing_quality", 5), reverse=True
+            )[:top_n]
 
         # 按场景/类型分组过滤
         dialogue_by_type = {}
@@ -667,7 +719,8 @@ class StageF(BaseStage):
             t = ds.get("scene_type", "未知")
             dialogue_by_type.setdefault(t, []).append(ds)
         results["dialogue_samples"] = [
-            s for samples in dialogue_by_type.values()
+            s
+            for samples in dialogue_by_type.values()
             for s in _filter_quality(samples, "scene_type", 3)
         ]
         desc_by_type = {}
@@ -675,15 +728,28 @@ class StageF(BaseStage):
             t = ds.get("description_type", "未知")
             desc_by_type.setdefault(t, []).append(ds)
         results["description_samples"] = [
-            s for samples in desc_by_type.values()
+            s
+            for samples in desc_by_type.values()
             for s in _filter_quality(samples, "description_type", 3)
         ]
-        results["transition_samples"] = _filter_quality(results.get("transition_samples", []), "transition_type", 5)
-        results["narrative_distance"] = _filter_quality(results.get("narrative_distance", []), "distance_type", 5)
-        results["show_tell_patterns"] = _filter_quality(results.get("show_tell_patterns", []), "pattern_type", 5)
-        results["action_scene_samples"] = _filter_quality(results.get("action_scene_samples", []), "action_type", 5)
-        results["climax_excerpts"] = _filter_quality(results.get("climax_excerpts", []), "excerpt_type", 5)
-        results["memorable_quotes"] = _filter_quality(results.get("memorable_quotes", []), "quote_type", 10)
+        results["transition_samples"] = _filter_quality(
+            results.get("transition_samples", []), "transition_type", 5
+        )
+        results["narrative_distance"] = _filter_quality(
+            results.get("narrative_distance", []), "distance_type", 5
+        )
+        results["show_tell_patterns"] = _filter_quality(
+            results.get("show_tell_patterns", []), "pattern_type", 5
+        )
+        results["action_scene_samples"] = _filter_quality(
+            results.get("action_scene_samples", []), "action_type", 5
+        )
+        results["climax_excerpts"] = _filter_quality(
+            results.get("climax_excerpts", []), "excerpt_type", 5
+        )
+        results["memorable_quotes"] = _filter_quality(
+            results.get("memorable_quotes", []), "quote_type", 10
+        )
 
         # 对话样本入库
         for ds in results.get("dialogue_samples", []):

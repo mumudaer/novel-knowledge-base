@@ -2,6 +2,8 @@
 Stage B: 写作技法与高潮点提取
 使用 qwen2.5:7b 模型，多线程提取每章的叙事技法、高潮/张力点、场景类型
 """
+
+import os
 import logging
 import math
 import re
@@ -9,7 +11,12 @@ from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import compress_state_to_text, find_quote_position_fast, generate_id
-from config.settings import STAGE_B_WORKERS, STAGE_SAMPLE_BASE, STAGE_SAMPLE_MULTIPLIER, STAGE_SAMPLE_DENOMINATOR
+from config.settings import (
+    STAGE_B_WORKERS,
+    STAGE_SAMPLE_BASE,
+    STAGE_SAMPLE_MULTIPLIER,
+    STAGE_SAMPLE_DENOMINATOR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +50,12 @@ def process_single_chapter_b(
 
     res.setdefault("narrative_skills", [])
     res.setdefault("scene_type", "未知")
-    res.setdefault("climax_point", {"has_climax_point": False, "quote": "", "buildup_method": ""})
-    res.setdefault("style_feature", {"tone": "无", "sentence_rhythm": "", "vocabulary_level": ""})
+    res.setdefault(
+        "climax_point", {"has_climax_point": False, "quote": "", "buildup_method": ""}
+    )
+    res.setdefault(
+        "style_feature", {"tone": "无", "sentence_rhythm": "", "vocabulary_level": ""}
+    )
     res["_raw_text"] = text  # 临时字段，缓存前剥离
 
     if res["climax_point"].get("has_climax_point") and res["climax_point"].get("quote"):
@@ -71,9 +82,15 @@ class StageB(BaseStage):
         if not text:
             return 0.0
         total = len(text)
-        dialogue_chars = sum(len(m) for m in re.findall(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', text))
+        dialogue_chars = sum(
+            len(m)
+            for m in re.findall(
+                r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]',
+                text,
+            )
+        )
         dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
-        emotion_count = sum(1 for c in text if c in ('！', '？', '…'))
+        emotion_count = sum(1 for c in text if c in ("！", "？", "…"))
         emotion_density = min(1.0, emotion_count / max(total, 1) * 200)
         unique_ratio = len(set(text)) / max(total, 1)
         vocab_richness = min(1.0, unique_ratio * 8)
@@ -86,28 +103,40 @@ class StageB(BaseStage):
         # 恢复断点
         cache = self.load_cache()
         success_list = cache.get("data", []) if cache else []
-        completed_ids = {x.get("chapter_id", "") for x in success_list if x.get("chapter_id")}
+        completed_ids = {
+            x.get("chapter_id", "") for x in success_list if x.get("chapter_id")
+        }
         if completed_ids:
             print(f"✅ [阶段B] 恢复断点：已完成 {len(completed_ids)} 章")
 
-        # 区间择优采样
-        total = len(chapters)
-        sample_count = max(STAGE_SAMPLE_BASE, min(total, int(
-            STAGE_SAMPLE_BASE + STAGE_SAMPLE_MULTIPLIER * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR))))
-        if total > sample_count:
-            interval = total / sample_count
-            selected = []
-            for i in range(sample_count):
-                start = int(i * interval)
-                end = int((i + 1) * interval) if i < sample_count - 1 else total
-                best_idx, best_score = start, -1
-                for j in range(start, min(end, total)):
-                    score = self._compute_chunk_score(chapters[j].get("text", ""))
-                    if score > best_score:
-                        best_score, best_idx = score, j
-                selected.append(chapters[best_idx])
-            logger.info(f"[阶段B] 区间择优采样: {sample_count}/{total} 章")
-            chapters = selected
+        # 区间择优采样（--full 模式下跳过，全量处理）
+        if not os.environ.get("NOVEL_KB_FULL_SAMPLE"):
+            total = len(chapters)
+            sample_count = max(
+                STAGE_SAMPLE_BASE,
+                min(
+                    total,
+                    int(
+                        STAGE_SAMPLE_BASE
+                        + STAGE_SAMPLE_MULTIPLIER
+                        * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+                    ),
+                ),
+            )
+            if total > sample_count:
+                interval = total / sample_count
+                selected = []
+                for i in range(sample_count):
+                    start = int(i * interval)
+                    end = int((i + 1) * interval) if i < sample_count - 1 else total
+                    best_idx, best_score = start, -1
+                    for j in range(start, min(end, total)):
+                        score = self._compute_chunk_score(chapters[j].get("text", ""))
+                        if score > best_score:
+                            best_score, best_idx = score, j
+                    selected.append(chapters[best_idx])
+                logger.info(f"[阶段B] 区间择优采样: {sample_count}/{total} 章")
+                chapters = selected
 
         pending = [c for c in chapters if c["id"] not in completed_ids]
         if not pending:
@@ -123,9 +152,13 @@ class StageB(BaseStage):
 
         # 处理未匹配的引文日志
         from config.settings import UNMATCHED_LOG
-        log_buffer = [r.get("_unmatched_log") for r in new_results if r.get("_unmatched_log")]
+
+        log_buffer = [
+            r.get("_unmatched_log") for r in new_results if r.get("_unmatched_log")
+        ]
         if log_buffer:
             import json
+
             with open(UNMATCHED_LOG, "a", encoding="utf-8") as f:
                 for item in log_buffer:
                     f.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -218,23 +251,33 @@ class StageB(BaseStage):
             s_ids, s_docs, s_metas = [], [], []
             for res in results:
                 for skill in res.get("narrative_skills", []):
-                    sid = generate_id(res["book_name"], res["chapter_id"], skill.get("skill_name", ""))
+                    sid = generate_id(
+                        res["book_name"], res["chapter_id"], skill.get("skill_name", "")
+                    )
                     s_ids.append(sid)
                     s_docs.append(
                         f"技法:{skill.get('skill_name', '')}\n分析:{skill.get('analysis', '')}\n"
                         f"原文:{skill.get('original_example', '')}\n复用场景:{skill.get('reuse_scenario', '')}"
-                        + (f"\n常见误区:{skill.get('anti_pattern', '')}" if skill.get('anti_pattern') else "")
+                        + (
+                            f"\n常见误区:{skill.get('anti_pattern', '')}"
+                            if skill.get("anti_pattern")
+                            else ""
+                        )
                     )
-                    s_metas.append({
-                        "book_name": res["book_name"],
-                        "category": res["category"],
-                        "scene_type": res.get("scene_type", ""),
-                        "skill_name": skill.get("skill_name", ""),
-                    })
+                    s_metas.append(
+                        {
+                            "book_name": res["book_name"],
+                            "category": res["category"],
+                            "scene_type": res.get("scene_type", ""),
+                            "skill_name": skill.get("skill_name", ""),
+                        }
+                    )
             if s_ids:
                 self.chroma.upsert_batch("novel_skills", s_ids, s_docs, s_metas)
                 stats["skills_chroma"] = len(s_ids)
 
         self.db.commit()
-        logger.info(f"   ✅ [阶段B战报] skills DB: {stats['skills_db']} 条 | ChromaDB: {stats['skills_chroma']} 条")
+        logger.info(
+            f"   ✅ [阶段B战报] skills DB: {stats['skills_db']} 条 | ChromaDB: {stats['skills_chroma']} 条"
+        )
         return stats

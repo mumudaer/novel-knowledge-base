@@ -3,6 +3,7 @@ Stage G: 人物深度特征提取
 使用 qwen14b:latest 模型，提取人物语言风格、行为标志、关系动态演变
 """
 
+import os
 import json
 import logging
 from typing import List, Dict, Any
@@ -33,7 +34,11 @@ class StageG(BaseStage):
         """
         logger.info(f"=== 阶段七：人物深度特征提取 ({self.book_name}) ===")
 
-        DATA_KEYS = ["character_speech_style", "character_behavior_marks", "character_relationship_dynamics"]
+        DATA_KEYS = [
+            "character_speech_style",
+            "character_behavior_marks",
+            "character_relationship_dynamics",
+        ]
         result = {key: [] for key in DATA_KEYS}
 
         # 断点恢复
@@ -45,7 +50,9 @@ class StageG(BaseStage):
                 result[key] = cached_result.get(key, [])
             completed_chars = set(cache.get("completed_chars", []))
             if completed_chars:
-                logger.info(f"✅ [阶段G] 恢复断点：已完成 {len(completed_chars)} 个人物")
+                logger.info(
+                    f"✅ [阶段G] 恢复断点：已完成 {len(completed_chars)} 个人物"
+                )
 
         # 一次遍历构建人物频率 + 人物→章节索引（避免 O(人物×章节) 嵌套循环）
         character_frequency = {}
@@ -55,7 +62,9 @@ class StageG(BaseStage):
             for char_name in char_state.keys():
                 if char_name in ("_raw", "旁白"):
                     continue
-                character_frequency[char_name] = character_frequency.get(char_name, 0) + 1
+                character_frequency[char_name] = (
+                    character_frequency.get(char_name, 0) + 1
+                )
                 if char_name not in character_chapters_index:
                     character_chapters_index[char_name] = []
                 character_chapters_index[char_name].append(chap)
@@ -81,8 +90,9 @@ class StageG(BaseStage):
             if len(char_chapters) < 3:
                 continue  # 出现次数太少，跳过
 
-            # 取前 5 章作为样本
-            sample_chapters = char_chapters[:5]
+            # 取样本章节（--full 模式下全量）
+            sample_limit = None if os.environ.get("NOVEL_KB_FULL_SAMPLE") else 5
+            sample_chapters = char_chapters[:sample_limit]
             sample_text = "\n\n".join(
                 [
                     f"【{c.get('id', '')}】\n{c.get('text', '')[:1000]}"
@@ -196,7 +206,9 @@ class StageG(BaseStage):
 
             # 标记完成并保存断点（仅成功时执行）
             completed_chars.add(char_name)
-            self.save_cache({"completed_chars": list(completed_chars), "result": result})
+            self.save_cache(
+                {"completed_chars": list(completed_chars), "result": result}
+            )
 
         logger.info(
             f"✅ [阶段G战报] 语言风格: {len(result['character_speech_style'])} 人, "
