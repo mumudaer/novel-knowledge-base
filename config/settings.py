@@ -12,7 +12,7 @@ import sys
 
 # 模型分配策略（根据任务复杂度自动选择）
 # 注意：Stage A 从 3b 升级为 7b，摘要质量是全链路地基，3b 质量不足会污染下游所有 Stage
-STAGE_A_MODEL = "qwen3.5:9b"  # 升级 9b：摘要质量是全链路地基，JSON 解析已做全模型兼容
+STAGE_A_MODEL = "qwen2.5:7b"  # 9b thinking API 不兼容，回退7b
 STAGE_B_MODEL = "qwen2.5:7b"  # 中复杂度：技法提取
 STAGE_C_MODEL = "qwen2.5:7b"  # 中复杂度：文风指纹
 STAGE_D_MODEL = "qwen14b:latest"  # 高复杂度：世界观、人物深度提取

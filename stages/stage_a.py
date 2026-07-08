@@ -186,7 +186,9 @@ class StageA(BaseStage):
                         protagonist_names = set(data["protagonist_names"])
             except Exception as e:
                 consecutive_fails += 1
+                raw = resp if 'resp' in dir() else '<无响应>'
                 logger.warning(f"章节 {chap.get('id', 'unknown')} 处理失败: {e}")
+                logger.warning(f"  9b 原始返回(前500字): {str(raw)[:500]}")
                 result_chap["character_state"] = flatten_character_state({"旁白": "断层"})
                 result_chap["summary"] = "处理失败"
                 result_chap["key_events"] = []

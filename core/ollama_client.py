@@ -261,14 +261,16 @@ class OllamaClient:
                         if line:
                             try:
                                 json_resp = json.loads(line.decode("utf-8"))
-                                if (
-                                    "message" in json_resp
-                                    and "content" in json_resp["message"]
-                                ):
+                                if "message" in json_resp and json_resp["message"].get("content"):
                                     full_content.append(json_resp["message"]["content"])
+                                elif "response" in json_resp:
+                                    full_content.append(json_resp["response"])
                             except json.JSONDecodeError:
                                 continue
-                    return "".join(full_content)
+                    result = "".join(full_content)
+                    if not result.strip():
+                        logger.warning(f"[Stage {stage}] Ollama 返回空内容，可能模型不兼容")
+                    return result
 
             except requests.exceptions.Timeout:
                 logger.warning(f"\u26a0\ufe0f 请求超时 (尝试 {attempt + 1}/{max_retries})")
@@ -350,6 +352,26 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
     """安全解析 JSON，兼容 qwen2.5/qwen3.5/qwen14b 等任意模型输出格式"""
     if not text:
         return None
+
+    # 路径0: 剥离 thinking 文本（qwen3.5 thinking 可能含 JSON 示例）
+    # 策略：从所有 { 位置依次尝试解析，保留最后一个成功的结果
+    if not text.startswith('{'):
+        best_result = None
+        pos = 0
+        while True:
+            pos = text.find('{', pos)
+            if pos == -1:
+                break
+            try:
+                candidate = json_repair.repair_json(text[pos:], return_objects=True)
+                if isinstance(candidate, dict) and best_result is None:
+                    best_result = candidate
+                    break  # 取第一个成功的 JSON（最外层），不再继续
+            except Exception:
+                pass
+            pos += 1
+        if best_result is not None:
+            return best_result
 
     # 路径1: json_repair 直接修复原文本（能处理 ```json 块、前后废话、格式错误）
     try:
