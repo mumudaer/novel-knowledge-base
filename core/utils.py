@@ -471,7 +471,9 @@ def compress_character_state(
             continue
         if name in ("_raw", "旁白"):
             continue
-        # 直接检查人物名是否出现在最近文本中
+        # 精确匹配：避免单字名子串误判（如"陈"匹配"陈旧"）
+        if len(name) < 2:
+            continue
         if name in recent_text:
             compressed[name] = value
 

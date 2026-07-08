@@ -691,7 +691,6 @@ class StageF(BaseStage):
                 ds["book_name"],
                 ds["chapter_id"],
                 ds["scene_type"],
-                ds["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO dialogue_samples VALUES (?,?,?,?,?,?,?,?,?)",
@@ -736,7 +735,6 @@ class StageF(BaseStage):
                 desc["book_name"],
                 desc["chapter_id"],
                 desc["description_type"],
-                desc["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO description_samples VALUES (?,?,?,?,?,?,?,?)",
@@ -779,7 +777,6 @@ class StageF(BaseStage):
                 trans["book_name"],
                 trans["chapter_id"],
                 trans["transition_type"],
-                trans["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO transition_samples VALUES (?,?,?,?,?,?,?)",
@@ -874,7 +871,6 @@ class StageF(BaseStage):
                 action["book_name"],
                 action["chapter_id"],
                 action["action_type"],
-                action["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO action_scene_samples VALUES (?,?,?,?,?,?,?,?,?)",
@@ -899,7 +895,6 @@ class StageF(BaseStage):
                 action["book_name"],
                 action["chapter_id"],
                 action["action_type"],
-                action["original_text"][:50],
             )
             a_ids.append(aid)
             ctx = get_chapter_context(action.get("chapter_id", ""))
@@ -925,7 +920,6 @@ class StageF(BaseStage):
                 climax["book_name"],
                 climax["chapter_id"],
                 climax["excerpt_type"],
-                climax["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO climax_excerpts VALUES (?,?,?,?,?,?,?,?)",
@@ -949,7 +943,6 @@ class StageF(BaseStage):
                 climax["book_name"],
                 climax["chapter_id"],
                 climax["excerpt_type"],
-                climax["original_text"][:50],
             )
             c_ids.append(cid)
             ctx = get_chapter_context(climax.get("chapter_id", ""))
@@ -975,7 +968,6 @@ class StageF(BaseStage):
                 oe["book_name"],
                 oe["chapter_id"],
                 oe["sample_position"],
-                oe["original_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO chapter_opening_ending_samples VALUES (?,?,?,?,?,?,?)",
@@ -997,7 +989,6 @@ class StageF(BaseStage):
                 quote["book_name"],
                 quote["chapter_id"],
                 quote["quote_type"],
-                quote["quote_text"][:50],
             )
             cursor.execute(
                 "INSERT OR REPLACE INTO memorable_quotes VALUES (?,?,?,?,?,?,?,?)",
@@ -1021,7 +1012,6 @@ class StageF(BaseStage):
                 quote["book_name"],
                 quote["chapter_id"],
                 quote["quote_type"],
-                quote["quote_text"][:50],
             )
             q_ids.append(qid)
             ctx = get_chapter_context(quote.get("chapter_id", ""))

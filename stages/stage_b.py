@@ -130,6 +130,11 @@ class StageB(BaseStage):
                 for item in log_buffer:
                     f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
+        # 清理临时字段，防止随缓存持久化
+        for r in success_list:
+            r.pop("_raw_text", None)
+            r.pop("_unmatched_log", None)
+
         return success_list
 
     @staticmethod

@@ -221,7 +221,7 @@ class StageE(BaseStage):
             start_chap = vol_idx * chapters_per_volume + 1
             
             # 每卷内再分批，每批最多 10 章
-            batch_size = 10
+            batch_size = 5  # 每批5章，避免7b@12288ctx溢出
             for batch_start in range(0, len(vol_chapters), batch_size):
                 # 断点跳过已完成批次
                 batch_key = f"{vol_idx}_{batch_start}"

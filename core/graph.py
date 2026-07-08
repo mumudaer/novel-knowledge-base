@@ -117,10 +117,10 @@ class GraphManager:
                 graph.add_edge(source, target, **{attr_name: attr_value})
             else:
                 old_val = str(graph[source][target].get(attr_name, ""))
-                old_list = [x.strip() for x in old_val.split(",") if x.strip()] if old_val else []
+                old_list = [x.strip() for x in old_val.split("|") if x.strip()] if old_val else []
                 if attr_value not in old_list:
                     old_list.append(attr_value)
-                graph[source][target][attr_name] = ",".join(old_list)
+                graph[source][target][attr_name] = "|".join(old_list)
 
 
 # 全局图谱管理器实例

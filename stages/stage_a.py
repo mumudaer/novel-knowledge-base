@@ -67,7 +67,7 @@ class StageA(BaseStage):
                     chapters[i]["time_progression"] = item.get("time_progression", "")
                     processed_chaps.append(chapters[i])
                 # 校验缓存完整性：summary 必须非空
-                if all(chap.get("summary", "") for chap in processed_chaps):
+                if all(chap.get("summary", "") and chap.get("summary") != "处理失败" for chap in processed_chaps):
                     finish_count = len(cached_data)
                     last_char_state = processed_chaps[-1]["character_state"]
                 inferred_category = cache.get("inferred_category", self.category)
@@ -113,7 +113,7 @@ class StageA(BaseStage):
         consecutive_fails = 0
 
         for idx, chap in enumerate(pbar):
-            chap_text = sanitize_for_prompt(chap["text"])
+            chap_text = chap["text"]
             result_chap = dict(chap)  # 独立副本，不修改输入 chapters
 
             if consecutive_fails >= 2:  # 2次连续失败即重置状态（避免污染下游）

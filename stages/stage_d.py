@@ -246,7 +246,7 @@ class StageD(BaseStage):
                                 "internal_conflict": cp.get("internal_conflict", ""),
                                 "personality": cp.get("personality", ""),
                                 "relation_to_mc": cp.get("relation_to_mc", "未知"),
-                                "abilities": cp.get("abilities", ""),
+                                "abilities": json.dumps(cp.get("abilities", ""), ensure_ascii=False) if isinstance(cp.get("abilities"), list) else cp.get("abilities", ""),
                                 "speech_samples": cp.get("speech_samples", ""),
                                 "behavior_samples": cp.get("behavior_samples", ""),
                                 "climax_or_fate": cp.get("climax_or_fate", ""),

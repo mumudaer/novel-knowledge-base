@@ -12,7 +12,7 @@ import sys
 
 # 模型分配策略（根据任务复杂度自动选择）
 # 注意：Stage A 从 3b 升级为 7b，摘要质量是全链路地基，3b 质量不足会污染下游所有 Stage
-STAGE_A_MODEL = "qwen3.5:9b"  # 升级 9b：摘要质量是全链路地基，9b 中文理解显著优于 7b
+STAGE_A_MODEL = "qwen3.5:9b"  # 升级 9b：摘要质量是全链路地基，JSON 解析已做全模型兼容
 STAGE_B_MODEL = "qwen2.5:7b"  # 中复杂度：技法提取
 STAGE_C_MODEL = "qwen2.5:7b"  # 中复杂度：文风指纹
 STAGE_D_MODEL = "qwen14b:latest"  # 高复杂度：世界观、人物深度提取
@@ -160,7 +160,7 @@ MODEL_CONFIG = {
         "workers": STAGE_E_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 卷大纲聚合，中等输出
+        "num_predict": 4096,  # 卷大纲+伏笔+状态变更，重输出
     },
     "F": {
         "model": STAGE_F_MODEL,
@@ -174,7 +174,7 @@ MODEL_CONFIG = {
         "workers": STAGE_G_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 人物深度分析，中等输出
+        "num_predict": 3072,  # 人物深度分析(语言风格+行为标志+关系)，偏重输出
     },
     "H": {
         "model": STAGE_H_MODEL,
@@ -223,7 +223,7 @@ MODEL_CONFIG = {
         "workers": STAGE_O_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_14B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 事件数量可控，2048 足够
+        "num_predict": 4096,  # 多事件因果图谱，重输出
     },
     "CTX": {
         "model": STAGE_CTX_MODEL,

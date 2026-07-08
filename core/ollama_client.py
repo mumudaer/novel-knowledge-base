@@ -138,7 +138,6 @@ class OllamaClient:
 
             # 检查必需模型
             required_models = {
-                "qwen3.5:9b",
                 "qwen2.5:7b",
                 "qwen14b:latest",
             }
@@ -348,38 +347,42 @@ def extract_raw_json(text: str) -> str:
 
 
 def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
-    """安全解析 JSON，支持修复常见格式错误"""
+    """安全解析 JSON，兼容 qwen2.5/qwen3.5/qwen14b 等任意模型输出格式"""
     if not text:
         return None
 
-    # 检测是否被截断修复：原始文本括号数 vs 修复后括号数
-    orig_open = text.count('{') + text.count('}')
-    raw = extract_raw_json(text)
-    if not raw:
-        return None
-    was_truncated = (raw.count('{') + raw.count('}')) != orig_open
-
+    # 路径1: json_repair 直接修复原文本（能处理 ```json 块、前后废话、格式错误）
     try:
-        result = json.loads(raw)
-        if was_truncated and isinstance(result, dict):
-            result["_truncated_by_safe_parse"] = True
-        return result
-    except json.JSONDecodeError:
-        # 尝试使用 json_repair 修复
+        result = json_repair.repair_json(text, return_objects=True)
+        if isinstance(result, dict):
+            return result
+    except Exception:
+        pass
+
+    # 路径2: extract_raw_json 提取 + json_repair 修复
+    raw = extract_raw_json(text)
+    if raw:
         try:
-            return json_repair.repair_json(raw, return_objects=True)
+            result = json_repair.repair_json(raw, return_objects=True)
+            if isinstance(result, dict):
+                return result
         except Exception:
             pass
 
-        # 尝试手动修复常见问题
+    # 路径3: 从最后一个 { 开始重新尝试（模型可能在 JSON 前输出了解释文本）
+    last_brace = text.rfind('{')
+    if last_brace > 0:
         try:
-            # 移除尾部逗号
-            fixed = re.sub(r",\s*([}\]])", r"\1", raw)
-            return json.loads(fixed)
+            result = json_repair.repair_json(text[last_brace:], return_objects=True)
+            if isinstance(result, dict):
+                return result
         except Exception:
             pass
 
-        return None
+    # 全部失败，记录原始输出以便排查模型问题
+    snippet = text[:500].replace('\n', '\\n')
+    logger.warning(f"safe_parse_json 解析失败 (len={len(text)}), 输出片段: {snippet}")
+    return None
 
 
 # 全局客户端实例
