@@ -8,6 +8,7 @@ import os
 import re
 import math
 import logging
+import os
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -25,6 +26,8 @@ from config.settings import (
 
 logger = logging.getLogger(__name__)
 
+_DIALOGUE_RE = re.compile(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', re.DOTALL)
+
 
 class StageF(BaseStage):
     """Stage F: 对话/描写/动作专项样本库"""
@@ -38,13 +41,7 @@ class StageF(BaseStage):
         if not text:
             return 0.0
         total = len(text)
-        dialogue_chars = sum(
-            len(m)
-            for m in re.findall(
-                r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]',
-                text,
-            )
-        )
+        dialogue_chars = sum(len(m) for m in _DIALOGUE_RE.findall(text))
         dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
         emotion_count = sum(1 for c in text if c in ("！", "？", "…"))
         emotion_density = min(1.0, emotion_count / max(total, 1) * 200)

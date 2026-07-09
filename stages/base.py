@@ -139,15 +139,18 @@ class BaseStage(ABC):
 
                     # 定期保存和清理
                     if completed_count % save_interval == 0:
-                        self.save_cache({"data": success_list})
+                        # 保存前过滤 _ 前缀临时字段
+                        clean_list = [{k:v for k,v in r.items() if not k.startswith('_')} for r in success_list]
+                        self.save_cache({"data": clean_list})
                         gc.collect()
 
                 except Exception as e:
                     item_idx = futures[task]
                     fail_list.append((item_idx, str(e)))
 
-        # 最终保存
-        self.save_cache({"data": success_list})
+        # 最终保存前过滤 _ 前缀临时字段
+        clean_list = [{k:v for k,v in r.items() if not k.startswith('_')} for r in success_list]
+        self.save_cache({"data": clean_list})
 
         if fail_list:
             self.logger.warning(f"⚠️ {len(fail_list)} 项处理失败: {fail_list[:5]}...")

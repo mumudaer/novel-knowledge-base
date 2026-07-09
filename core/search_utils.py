@@ -11,7 +11,12 @@ from core.chroma_client import get_chroma_manager
 logger = logging.getLogger(__name__)
 
 # 表名白名单，防止 SQL 注入
-ALLOWED_TABLES = {
+def _get_allowed_tables():
+    from core.db import DatabaseManager
+    return set(DatabaseManager.TABLE_SCHEMAS.keys())
+ALLOWED_TABLES = _get_allowed_tables()
+# (was hardcoded, now auto-generated from TABLE_SCHEMAS)
+_OLD_ALLOWED_TABLES = {
     # Stage A
     "plot_arcs",
     # Stage B

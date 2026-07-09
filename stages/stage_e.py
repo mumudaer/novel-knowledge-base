@@ -90,7 +90,18 @@ class StageE(BaseStage):
                 for ch in vol_chapters
             ])
             if len(summaries_text) > 6000:
-                summaries_text = summaries_text[:6000] + "\n...(截断)"
+                lines = summaries_text.split('\n')
+                if len(lines) > 20:
+                    head_n = max(3, len(lines) // 4)
+                    tail_n = max(3, len(lines) // 4)
+                    step = max(1, (len(lines) - head_n - tail_n) // 50)
+                    kept = lines[:head_n]
+                    for i in range(head_n, len(lines) - tail_n, step):
+                        kept.append(lines[i])
+                    kept.extend(lines[-tail_n:])
+                    summaries_text = '\n'.join(kept)
+                else:
+                    summaries_text = summaries_text[:6000] + "\n...(截断)"
 
             # 卷大纲 Prompt
             prompt_e = f"""你是资深文学主编。根据《{self.book_name}》({self.category})第{start_chap}-{end_chap}章摘要，提炼宏观大纲，并盘点本卷【全阵营人物状态变更】与【伏笔/意象悬念】。

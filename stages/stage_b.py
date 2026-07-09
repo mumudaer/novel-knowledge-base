@@ -7,6 +7,8 @@ import os
 import logging
 import math
 import re
+import copy
+from collections import defaultdict
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
@@ -71,6 +73,8 @@ def process_single_chapter_b(
     return res
 
 
+_DIALOGUE_RE = re.compile(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', re.DOTALL)
+
 class StageB(BaseStage):
     """Stage B: 写作技法与高潮点提取"""
 
@@ -82,13 +86,7 @@ class StageB(BaseStage):
         if not text:
             return 0.0
         total = len(text)
-        dialogue_chars = sum(
-            len(m)
-            for m in re.findall(
-                r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]',
-                text,
-            )
-        )
+        dialogue_chars = sum(len(m) for m in _DIALOGUE_RE.findall(text))
         dialogue_density = min(1.0, dialogue_chars / max(total, 1) * 3)
         emotion_count = sum(1 for c in text if c in ("！", "？", "…"))
         emotion_density = min(1.0, emotion_count / max(total, 1) * 200)
@@ -176,9 +174,6 @@ class StageB(BaseStage):
         轻量合并：同一章的多个切片合并 narrative_skills，保留各自的 scene_type。
         例如：第3章_1 和 第3章_2 的技法合并到同一个 “第3章” 记录下。
         """
-        import re as _re
-        import copy
-        from collections import defaultdict
 
         # 去除切片后缀：第3章_1 → 第3章，第3章_2 → 第3章
         def clean_chapter_id(cid: str) -> str:

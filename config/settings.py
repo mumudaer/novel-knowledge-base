@@ -45,7 +45,7 @@ STAGE_D_WORKERS = 2  # 14b 模型，双并发（用户实测可行）
 STAGE_E_WORKERS = 1  # 7b 模型，单并发（需要聚合上下文）
 STAGE_F_WORKERS = 2  # 14b 模型，双并发
 STAGE_G_WORKERS = 2  # 14b 模型，双并发
-STAGE_H_WORKERS = 2  # 14b 模型，双并发
+STAGE_H_WORKERS = 1  # H 串行调用3组Prompt，非并发
 STAGE_J_WORKERS = 2  # 14b 模型，双并发
 STAGE_K_WORKERS = 1  # 7b 模型，单并发（推荐以保证质量）
 STAGE_L_WORKERS = 1  # 14b 模型，单并发（分析任务较重）
@@ -61,7 +61,7 @@ STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 OLLAMA_NUM_CTX_7B = 12288  # 7b/9b 通用上下文（足够容纳 3500 字章节 + 模板）
 # 14b KV cache: 192 KB/token → 14336 tokens ≈ 2.8 GB, model ~9 GB → 总计 ~12 GB
 OLLAMA_NUM_CTX_14B = (
-    14336  # 配合 SPLIT_THRESHOLD=3500, 每块≤3500字完整喂给 LLM (D-char budget=4909)
+    14336  # 配合 SPLIT_THRESHOLD=5000, 每块≤5000字, 14b@14336 safe=6493 chars
 )
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
 OLLAMA_TIMEOUT = 300  # 超时时间（秒）（14b正常60-120s/次，300s已含2.5-5x余量）
