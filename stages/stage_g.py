@@ -90,12 +90,12 @@ class StageG(BaseStage):
             if len(char_chapters) < 3:
                 continue  # 出现次数太少，跳过
 
-            # 取样本章节（--full 模式下全量）
-            sample_limit = None if os.environ.get("NOVEL_KB_FULL_SAMPLE") else 5
+            # 取样本章节（--full 模式下全量；默认6章，每章前900字）
+            sample_limit = None if os.environ.get("NOVEL_KB_FULL_SAMPLE") else 6
             sample_chapters = char_chapters[:sample_limit]
             sample_text = "\n\n".join(
                 [
-                    f"【{c.get('id', '')}】\n{c.get('text', '')[:1000]}"
+                    f"【{c.get('id', '')}】\n{c.get('text', '')[:900]}"
                     for c in sample_chapters
                 ]
             )

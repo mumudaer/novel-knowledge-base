@@ -139,7 +139,7 @@ MODEL_CONFIG = {
         "workers": STAGE_B_WORKERS,
         "num_ctx": OLLAMA_NUM_CTX_7B,
         "temperature": 0.2,
-        "num_predict": 2048,  # 技法提取，中等输出
+        "num_predict": 3072,  # 技法+高潮+风格，技法丰富章节可达3000+token
     },
     "C": {
         "model": STAGE_C_MODEL,

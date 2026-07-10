@@ -56,20 +56,34 @@ class BaseStage(ABC):
         """将结果写入数据库，返回写入统计"""
         pass
 
-    def load_cache(self) -> Optional[Dict]:
-        """加载断点缓存"""
+    def load_cache(self, expected_book: str = None, expected_chapter_count: int = None) -> Optional[Dict]:
+        """加载断点缓存，可选校验 book_name 和章节数"""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, "r", encoding="utf-8") as f:
                     cache = json.load(f)
+                # 校验缓存与当前输入是否一致
+                meta = cache.get("_meta", {})
+                if expected_book and meta.get("book_name") != expected_book:
+                    self.logger.warning(f"⚠️ 缓存书名不匹配 ({meta.get('book_name')} vs {expected_book})，丢弃旧缓存")
+                    return None
+                if expected_chapter_count and meta.get("chapter_count") != expected_chapter_count:
+                    self.logger.warning(f"⚠️ 缓存章节数不匹配 ({meta.get('chapter_count')} vs {expected_chapter_count})，丢弃旧缓存")
+                    return None
                 self.logger.info(f"✅ 恢复断点缓存: {self.cache_file}")
                 return cache
             except Exception as e:
                 self.logger.warning(f"⚠️ 缓存加载失败: {e}")
         return None
 
-    def save_cache(self, data: Dict):
-        """保存断点缓存"""
+    def save_cache(self, data: Dict, book_name: str = None, chapter_count: int = None):
+        """保存断点缓存，附带元数据用于加载时校验"""
+        if book_name or chapter_count:
+            data["_meta"] = {}
+            if book_name:
+                data["_meta"]["book_name"] = book_name
+            if chapter_count:
+                data["_meta"]["chapter_count"] = chapter_count
         save_state_atomic(self.cache_file, data)
 
     def cleanup(self):

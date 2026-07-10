@@ -94,10 +94,13 @@ class StageE(BaseStage):
                 if len(lines) > 20:
                     head_n = max(3, len(lines) // 4)
                     tail_n = max(3, len(lines) // 4)
-                    step = max(1, (len(lines) - head_n - tail_n) // 50)
                     kept = lines[:head_n]
-                    for i in range(head_n, len(lines) - tail_n, step):
-                        kept.append(lines[i])
+                    # 中间部分：优先保留含转折/高潮/冲突关键词的摘要行
+                    _key_re = re.compile(r'转折|高潮|冲突|揭露|伏笔|关键|爆发|逆转|危机|秘密')
+                    # 稀疏采样（每10行取1行）+ 关键词匹配行全部保留
+                    for i in range(head_n, len(lines) - tail_n):
+                        if i % 10 == 0 or _key_re.search(lines[i]):
+                            kept.append(lines[i])
                     kept.extend(lines[-tail_n:])
                     summaries_text = '\n'.join(kept)
                 else:
@@ -119,7 +122,7 @@ class StageE(BaseStage):
       "hook_name": "伏笔/悬念/核心意象名称",
       "action": "埋下(plant) / 推进(advance) / 回收(resolve) / 延后(defer)",
       "description": "伏笔内容简述或意象呼应方式",
-      "payoff_timing": "预期回收节奏(immediate近几章/near-term本卷内/mid-arc跨2-3卷/slow-burn大半本书/endgame全书终局)",
+      "payoff_timing": "本卷内已回收/未回收(二选一)",
       "scope_type": "伏笔作用范围(book全书/volume本卷/chapter本章)",
       "resolution_excerpt": "如果是回收类伏笔，摘录回收时的原文片段(100-200字)；否则留空"
     }}

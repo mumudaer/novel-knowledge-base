@@ -142,8 +142,8 @@ class StageA(BaseStage):
 输出JSON：{{
   "chapter_summary": "300-500字剧情摘要，包含主要事件和转折",
   "key_events": [
-    {{"event": "关键事件1(50字内)", "impact": "对剧情的影响(30字内)"}},
-    {{"event": "关键事件2(50字内)", "impact": "对剧情的影响(30字内)"}}
+    {{"event": "关键事件1(50字内)", "impact": "对本章局势的影响(30字内)"}},
+    {{"event": "关键事件2(50字内)", "impact": "对本章局势的影响(30字内)"}}
   ],
   "character_state": {{"角色名": "位置/状态/情绪/目标(如:京城/受伤/愤怒/寻找解药)"}},
   "scene_transitions": {{
@@ -157,6 +157,7 @@ class StageA(BaseStage):
   "emotion_arc": "本章主要情绪走向(如:平静→紧张→爆发→余韵，20字内)",
   "time_progression": "本章时间推进(如:过了三天/同一天晚上/时间未明确，20字内)",{category_prompt}
 }}"""
+            resp = ""
             try:
                 resp = ollama_chat(prompt, 0.1, "A")
                 data = safe_parse_json(resp)
@@ -190,7 +191,7 @@ class StageA(BaseStage):
                 logger.warning(f"章节 {chap.get('id', 'unknown')} 处理失败: {e}")
                 logger.warning(f"  9b 原始返回(前500字): {str(raw)[:500]}")
                 result_chap["character_state"] = flatten_character_state({"旁白": "断层"})
-                result_chap["summary"] = "处理失败"
+                result_chap["summary"] = ""  # 空串防止"处理失败"文本污染下游
                 result_chap["key_events"] = []
                 result_chap["scene_transitions"] = {}
                 result_chap["information_flow"] = {}

@@ -3,6 +3,7 @@
 在每个 Stage 完成后自动运行轻量级质量检查，发现提取错误并记录
 """
 import json
+import threading
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -442,9 +443,13 @@ class QualityChecker:
 _global_checker: Optional[QualityChecker] = None
 
 
+_global_checker_lock = threading.Lock()
+
 def get_quality_checker() -> QualityChecker:
-    """获取全局质量检查器"""
+    """获取全局质量检查器（线程安全）"""
     global _global_checker
     if _global_checker is None:
-        _global_checker = QualityChecker()
+        with _global_checker_lock:
+            if _global_checker is None:
+                _global_checker = QualityChecker()
     return _global_checker

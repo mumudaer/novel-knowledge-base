@@ -103,8 +103,7 @@ class StageF(BaseStage):
       "original_text": "从原文中原封不动摘录的完整对话段落（200-400字，包含说话人标识和对话内容）",
       "emotional_tension": "情绪张力分析(如:表面平静暗流涌动/激烈对抗/温馨感人，30字内)",
       "subtext": "潜台词分析(角色真正想表达但未明说的内容，50字内)",
-      "plot_function": "对话推动剧情的作用(如:揭露秘密/建立联盟/引发冲突/传递信息，30字内)",
-      "excerpt_accuracy": 10,
+      "plot_function": "对话推动剧情的作用(如:揭露秘密/建立联盟/引发冲突/传递信息，30字内)"
       "writing_quality": 8
     }}
   ],
@@ -113,8 +112,7 @@ class StageF(BaseStage):
       "description_type": "描写类型(打斗动作/环境氛围/心理活动/外貌特征/细节特写)",
       "original_text": "从原文中原封不动摘录的完整描写段落（200-400字）",
       "technique_analysis": "技法分析(如:动词精准/五感并用/意识流/白描/工笔，50字内)",
-      "sensory_details": "感官细节(视觉/听觉/嗅觉/触觉/味觉的运用，50字内)",
-      "excerpt_accuracy": 10,
+      "sensory_details": "感官细节(视觉/听觉/嗅觉/触觉/味觉的运用，50字内)"
       "writing_quality": 8
     }}
   ],
@@ -122,15 +120,14 @@ class StageF(BaseStage):
     {{
       "transition_type": "转场类型(场景切换/时间跳跃/视角切换/蒙太奇)",
       "original_text": "从原文中原封不动摘录的转场段落（100-300字，包含转场前后的衔接）",
-      "technique_analysis": "转场技法分析(如:空行分隔/时间标记/视角切换/意象过渡，50字内)",
-      "excerpt_accuracy": 10,
+      "technique_analysis": "转场技法分析(如:空行分隔/时间标记/视角切换/意象过渡，50字内)"
       "writing_quality": 8
     }}
   ]
 }}
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
-2. 每个摘录必须附带 excerpt_accuracy（原文准确度1-10）+ writing_quality（写作质量1-10）
+2. 每个摘录必须附带 writing_quality（写作质量1-10）
    writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
    ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
 3. 每章最多提取 2-3 个最典型的对话样本、2-3 个描写样本、1-2 个转场样本
@@ -222,8 +219,7 @@ class StageF(BaseStage):
     {{
       "distance_type": "叙事距离类型(贴近内心/中等距离/全知鸟瞰)",
       "trigger_reason": "触发距离变化的原因(如:情感高潮/信息揭露/场景转换，50字内)",
-      "original_example": "原文示例(摘录体现该距离的关键段落，100-200字)",
-      "excerpt_accuracy": 10,
+      "original_example": "原文示例(摘录体现该距离的关键段落，100-200字)"
       "writing_quality": 8
     }}
   ],
@@ -232,8 +228,7 @@ class StageF(BaseStage):
       "pattern_type": "模式类型(Show为主/Tell为主/混合)",
       "ratio_estimate": "Show vs Tell 比例估算(如:7:3/5:5，10字内)",
       "switching_triggers": "切换时机(如:情感场景用Show/背景介绍用Tell，50字内)",
-      "original_example": "原文示例(摘录体现该模式的关键段落，100-200字)",
-      "excerpt_accuracy": 10,
+      "original_example": "原文示例(摘录体现该模式的关键段落，100-200字)"
       "writing_quality": 8
     }}
   ],
@@ -243,8 +238,7 @@ class StageF(BaseStage):
       "original_text": "从原文中原封不动摘录的完整动作场景段落（200-400字）",
       "technique_analysis": "技法分析(如:短句快节奏/动词精准/感官并用/视角切换，50字内)",
       "pacing_analysis": "节奏控制分析(如:快慢交替/逐步加速/爆发式高潮，50字内)",
-      "sensory_details": "感官细节(视觉/听觉/触觉的运用，50字内)",
-      "excerpt_accuracy": 10,
+      "sensory_details": "感官细节(视觉/听觉/触觉的运用，50字内)"
       "writing_quality": 8
     }}
   ],
@@ -253,8 +247,7 @@ class StageF(BaseStage):
       "excerpt_type": "高潮段落类型(决战/揭秘/情感爆发/逆转/生死抉择)",
       "original_text": "从原文中原封不动摘录的高潮段落（200-400字）",
       "technique_analysis": "技法分析(如:短句爆发/感官轰炸/情感渲染/悬念释放，50字内)",
-      "emotional_impact": "情感冲击力分析(如:震撼/感动/紧张/释然，50字内)",
-      "excerpt_accuracy": 10,
+      "emotional_impact": "情感冲击力分析(如:震撼/感动/紧张/释然，50字内)"
       "writing_quality": 8
     }}
   ],
@@ -263,15 +256,14 @@ class StageF(BaseStage):
       "quote_text": "金句/名句原文（50-150字）",
       "context": "上下文背景(如:主角在绝境中的感悟/角色间的哲学对话，50字内)",
       "technique_analysis": "技法分析(如:对比/排比/隐喻/哲理/金句结构，50字内)",
-      "quote_type": "金句类型(哲理句/经典台词/情感金句/励志金句/讽刺金句)",
-      "excerpt_accuracy": 10,
+      "quote_type": "金句类型(哲理句/经典台词/情感金句/励志金句/讽刺金句)"
       "writing_quality": 8
     }}
   ]
 }}
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
-2. 每个摘录必须附带 excerpt_accuracy（原文准确度1-10）+ writing_quality（写作质量1-10）
+2. 每个摘录必须附带 writing_quality（写作质量1-10）
    writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
    ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
 3. 必须分析叙事距离的变化（何时贴近内心、何时拉远鸟瞰）！
@@ -787,7 +779,7 @@ class StageF(BaseStage):
         bulk_upsert_to_chroma(
             "dialogue_samples_kb",
             chroma_dialogue_items,
-            id_fields=["book_name", "chapter_id", "scene_type", "original_text"],
+            id_fields=["book_name", "chapter_id", "scene_type"],  # 确定性ID,
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "scene_type"],
         )
@@ -829,7 +821,7 @@ class StageF(BaseStage):
         bulk_upsert_to_chroma(
             "description_samples_kb",
             chroma_desc_items,
-            id_fields=["book_name", "chapter_id", "description_type", "original_text"],
+            id_fields=["book_name", "chapter_id", "description_type"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "description_type"],
         )
@@ -869,7 +861,7 @@ class StageF(BaseStage):
         bulk_upsert_to_chroma(
             "transition_samples_kb",
             chroma_trans_items,
-            id_fields=["book_name", "chapter_id", "transition_type", "original_text"],
+            id_fields=["book_name", "chapter_id", "transition_type"],
             text_field="_chroma_text",
             metadata_fields=["book_name", "chapter_id", "transition_type"],
         )

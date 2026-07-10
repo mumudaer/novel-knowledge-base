@@ -127,7 +127,8 @@ def hybrid_search(
             pass
 
     # 2. SQL 过滤补充
-    sql_query = f"SELECT * FROM {table} WHERE 1=1"
+    col_str = ", ".join(columns) if columns else "*"
+    sql_query = f"SELECT {col_str} FROM {table} WHERE 1=1"
     params = []
 
     if filters:

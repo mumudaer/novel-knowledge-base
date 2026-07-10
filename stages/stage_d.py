@@ -219,7 +219,7 @@ class StageD(BaseStage):
       "abilities": "能力体系(技能/天赋/战斗风格，50字内)",
       "speech_samples": "语言风格样本(口头禅、用词习惯的原文摘录，100字内)",
       "behavior_samples": "行为标志样本(习惯性动作的原文描写，100字内)",
-      "climax_or_fate": "高光时刻预设/宿命结局",
+      "climax_or_fate": "已观测高光时刻(如关键战斗/情感爆发/名场面等，无则留空)",
       "background": "前史/背景故事/原生家庭影响"
     }}
   ]
@@ -260,15 +260,16 @@ class StageD(BaseStage):
         
         return result
 
-    def _aggregate_characters(self, profiles: List[Dict]) -> Dict[str, tuple]:
-        """按人物名聚合核心字段，返回 {name: (core_text, chapter_refs)}"""
+    def _aggregate_characters(self, profiles: List[Dict], chapters: List[Dict]) -> Dict[str, tuple]:
+        """按人物名聚合核心字段 + 原文片段，返回 {name: (core_text, chapter_refs, raw_snippets)}"""
+        chap_text_map = {c.get("id", ""): c.get("text", "") for c in chapters}
         agg = {}
         for p in profiles:
             name = p.get("name", "")
             if not name:
                 continue
             if name not in agg:
-                agg[name] = {"texts": [], "chapters": []}
+                agg[name] = {"texts": [], "chapters": [], "raw_texts": []}
             agg[name]["chapters"].append(p)
             agg[name]["texts"].append(
                 f"定位:{p.get('role_type','')}|外貌:{p.get('appearance','')}|"
@@ -279,9 +280,20 @@ class StageD(BaseStage):
                 f"行为:{p.get('behavior_samples','')}|高光:{p.get('climax_or_fate','')}|"
                 f"前史:{p.get('background','')}"
             )
-        return {name: (" | ".join(d["texts"]), d["chapters"]) for name, d in agg.items()}
+            cid = p.get("chapter_id", "")
+            raw = chap_text_map.get(cid, "")
+            if raw and len(agg[name]["raw_texts"]) < 5:
+                agg[name]["raw_texts"].append(raw[:500])
+        return {
+            name: (
+                " | ".join(d["texts"]),
+                d["chapters"],
+                "\n---\n".join(d["raw_texts"]) if d["raw_texts"] else "",
+            )
+            for name, d in agg.items()
+        }
 
-    def _extend_character(self, name: str, core_text: str, chapters: List[Dict]):
+    def _extend_character(self, name: str, core_text: str, chapters: List[Dict], raw_snippets: str = ""):
         """基于聚合核心档案提取扩展19字段，回填到所有该人物的记录中"""
         if not core_text.strip():
             return
@@ -289,11 +301,11 @@ class StageD(BaseStage):
 
 【核心档案】
 {core_text[:5000]}
+{"【关键原文片段】\n" + raw_snippets[:3000] if raw_snippets else ""}
 
 请输出纯 JSON 格式：
 {{
   "fatal_flaw": "性格缺陷/悲剧根源(50字内，无则留空)",
-  "symbolism": "象征意义/社会隐喻(限30字，无则留空)",
   "relations_to_others": "与其他重要配角的社会与情感羁绊(100字内，无则留空)",
   "desire_vs_need": "欲望vs需求(表面想要的vs真正需要的，50字内，无则留空)",
   "secrets": "人物的秘密(隐藏的过去、不可告人的目的，50字内，无则留空)",
@@ -307,10 +319,8 @@ class StageD(BaseStage):
   "cognitive_bias": "认知偏差(对世界/他人的错误认知、偏见，50字内，无则留空)",
   "transformation_trigger": "转变触发器(什么事件触发了人物转变，50字内，无则留空)",
   "contrast_design": "对比设计(与同类型角色的差异设计，50字内，无则留空)",
-  "archetype_label": "角色原型标签(30字内，无则留空)",
-  "writing_anti_patterns": "忌讳写法/毒点(50字内，无则留空)"
 }}
-(⚠️所有字段无则留空，禁止编造信息。禁止反引号)"""
+(⚠️核心要求：所有字段无则留空，禁止编造信息。禁止反引号)"""
         resp = ollama_chat(prompt, 0.1, "D")
         data = safe_parse_json(resp)
         if not data:
@@ -439,12 +449,12 @@ class StageD(BaseStage):
         # Phase 2: 聚合核心档案 → 提取扩展19字段
         char_profiles = result.get("character_profiles", [])
         if char_profiles:
-            aggregated = self._aggregate_characters(char_profiles)
+            aggregated = self._aggregate_characters(char_profiles, chapters)
             if aggregated:
                 logger.info(f"[阶段D] Phase2: 提取 {len(aggregated)} 个人物的扩展字段...")
-                for name, (core_text, chapters) in aggregated.items():
+                for name, (core_text, chaps, raw_snippets) in aggregated.items():
                     try:
-                        self._extend_character(name, core_text, chapters)
+                        self._extend_character(name, core_text, chaps, raw_snippets)
                     except Exception as e:
                         logger.warning(f"⚠️ [阶段D] 人物 {name} 扩展提取失败: {e}")
 

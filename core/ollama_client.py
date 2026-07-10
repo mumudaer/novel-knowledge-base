@@ -186,6 +186,31 @@ class OllamaClient:
         num_ctx = config["num_ctx"]
         num_predict = config.get("num_predict", 2048)  # 从 Stage 配置读取，默认 2048
 
+        # System prompt 自动分离 + 防注入
+        text_marker = "【正文】"
+        if system is None and text_marker in prompt:
+            json_start = prompt.rfind("\n{")
+            if json_start == -1:
+                json_start = prompt.rfind("{")
+            if json_start > prompt.find(text_marker):
+                text_pos = prompt.find(text_marker) + len(text_marker)
+                # system: 指令 + JSON Schema + 规则 (novel text 之前和之后的部分)
+                system = prompt[:text_pos] + prompt[json_start:]
+                # user: 小说正文 (sanitize { } → 全角)
+                user_text = prompt[text_pos:json_start]
+                prompt = user_text.replace('{', '｛').replace('}', '｝')
+        elif text_marker in prompt:
+            # explicit system provided, still sanitize novel text
+            json_start = prompt.rfind("\n{")
+            if json_start == -1:
+                json_start = prompt.rfind("{")
+            if json_start > prompt.find(text_marker):
+                text_pos = prompt.find(text_marker) + len(text_marker)
+                head = prompt[:text_pos]
+                body = prompt[text_pos:json_start].replace('{', '｛').replace('}', '｝')
+                tail = prompt[json_start:]
+                prompt = head + body + tail
+
         # Prompt 长度检查：防止 Ollama 静默截断导致指令丢失
         # 粗略估算 token 数：中文字符 ≈ 1.5 token，ASCII ≈ 0.25 token
         safe_token_limit = num_ctx - num_predict - 500  # 预留 500 token 缓冲
