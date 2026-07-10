@@ -15,4 +15,4 @@ from .stage_l import StageL
 from .stage_m import StageM
 from .stage_n import StageN
 from .stage_o import StageO
-from .stage_q import StageQ
+from .stage_q import QualityChecker
