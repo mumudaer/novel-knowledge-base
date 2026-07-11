@@ -16,6 +16,7 @@ import re
 import logging
 import argparse
 import threading
+import traceback
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -155,7 +156,9 @@ def print_progress_matrix(manifest: Dict, novel_list: List[Dict]):
             else:
                 return "--"
 
-        icons = [status_icon(s) for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]]
+        icons = [
+            status_icon(s) for s in ["A", "B", "C", "D", "I", "E", "F", "G", "H", "O"]
+        ]
 
         # 判断整体状态
         if all(
@@ -210,11 +213,17 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
             raw_file_name,
         )
         if not author_match:
-            author_match = re.search(r"by\s+(.+?)(?=\s*分类[：:]|\s*标签[：:]|\s*$)", raw_file_name, re.IGNORECASE)
+            author_match = re.search(
+                r"by\s+(.+?)(?=\s*分类[：:]|\s*标签[：:]|\s*$)",
+                raw_file_name,
+                re.IGNORECASE,
+            )
         author_name = author_match.group(1).strip() if author_match else "未知作者"
 
         # 提取分类（优先从文件名，降级到目录结构）
-        category_match = re.search(r"分类[：:]\s*(.+?)(?=\s*标签[：:]|\s*$)", raw_file_name)
+        category_match = re.search(
+            r"分类[：:]\s*(.+?)(?=\s*标签[：:]|\s*$)", raw_file_name
+        )
         if category_match:
             category = category_match.group(1).strip()
         else:
@@ -223,7 +232,9 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
             parts = rel_path.split(os.sep)
             if len(parts) >= 3:
                 category = parts[1]
-                category = re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+                category = (
+                    re.sub(r"[\(（].*?[\)）]", "", category).replace("合集", "").strip()
+                )
             elif len(parts) == 2:
                 category = parts[0]
             else:
@@ -231,7 +242,11 @@ def scan_novel_library(root_dir: str) -> List[Dict[str, Any]]:
 
         # 提取标签
         tags_match = re.search(r"标签[：:]\s*(.+?)$", raw_file_name)
-        tags = [t.strip() for t in tags_match.group(1).split("、") if t.strip()] if tags_match else []
+        tags = (
+            [t.strip() for t in tags_match.group(1).split("、") if t.strip()]
+            if tags_match
+            else []
+        )
 
         db_book_name = f"{pure_book_name}{suffix}" if suffix else pure_book_name
 
@@ -369,7 +384,10 @@ def run_layer_2(
                     stage_obj.run_quality_check(result)
                     mark_stage_complete(manifest, book_name, key)
                 except Exception as e:
-                    logger.error(f"Stage {stage_key} 执行失败: {e}")
+
+                    logger.error(
+                        f"Stage {stage_key} 执行失败: {e}\n{traceback.format_exc()}"
+                    )
                     mark_stage_failed(manifest, book_name, stage_key, str(e))
 
     # Group 1: I(统计) + B(7b) + C(7b) — 并行，无模型冲突
@@ -476,13 +494,13 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
             stage_e_result_local = result
             _insert_and_check(result_key, stage_obj, result)
         except Exception as e:
-            logger.error(f"Stage E 执行失败: {e}")
+            logger.error(f"Stage E 执行失败: {e}\n{traceback.format_exc()}")
             mark_stage_failed(manifest, book_name, "E", str(e))
 
     # Group 2: F(14b)+G(14b)+O(14b) 并行，H(14b) 依赖 E 结果最后执行
     group2 = {k: v for k, v in tasks.items() if k in ("F", "G", "O")}
     h_obj_final = tasks.get("H")
-    
+
     if group2:
         with ThreadPoolExecutor(max_workers=len(group2)) as executor:
             futures = {}
@@ -495,7 +513,7 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
                     result_key, stage_obj, result = future.result()
                     _insert_and_check(result_key, stage_obj, result)
                 except Exception as e:
-                    logger.error(f"Stage {key} 执行失败: {e}")
+                    logger.error(f"Stage {key} 执行失败: {e}\n{traceback.format_exc()}")
                     mark_stage_failed(manifest, book_name, key, str(e))
 
     if h_obj_final is not None:
@@ -508,7 +526,7 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
                 h_key, h_obj, h_result = run_stage_h(h_obj_final, e_res_for_h)
                 _insert_and_check(h_key, h_obj, h_result)
             except Exception as e:
-                logger.error(f"Stage H 执行失败: {e}")
+                logger.error(f"Stage H 执行失败: {e}\n{traceback.format_exc()}")
                 mark_stage_failed(manifest, book_name, "H", str(e))
 
 
@@ -647,6 +665,7 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
             # 无 BOM：用 charset-normalizer 智能检测编码
             try:
                 from charset_normalizer import from_bytes
+
                 detection = from_bytes(raw_bytes)
                 best = detection.best()
                 if best is not None:
@@ -657,7 +676,9 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
                         f"(置信度: {best.language or 'N/A'}, {len(raw_bytes)} 字节)"
                     )
             except ImportError:
-                logger.warning("charset-normalizer 未安装，使用降级编码检测（pip install charset-normalizer）")
+                logger.warning(
+                    "charset-normalizer 未安装，使用降级编码检测（pip install charset-normalizer）"
+                )
             except Exception as e:
                 logger.warning(f"charset-normalizer 检测失败: {e}，使用降级编码检测")
 
@@ -668,7 +689,8 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
                         candidate = raw_bytes.decode(encoding)
                         replacement_count = candidate.count("\ufffd")
                         control_chars = sum(
-                            1 for ch in candidate[:5000]
+                            1
+                            for ch in candidate[:5000]
                             if ord(ch) < 32 and ch not in ("\n", "\r", "\t")
                         )
                         if replacement_count > 10 or control_chars > 50:
@@ -682,9 +704,13 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
         if not raw_text:
             raw_text = raw_bytes.decode("latin-1", errors="ignore")
             detected_encoding = "latin-1"
-            logger.warning(f"《{book_name}》 所有编码均失败，使用 latin-1 降级读取（可能有乱码）")
+            logger.warning(
+                f"《{book_name}》 所有编码均失败，使用 latin-1 降级读取（可能有乱码）"
+            )
         elif detected_encoding and detected_encoding != "latin-1":
-            logger.info(f"《{book_name}》 检测编码: {detected_encoding} ({len(raw_bytes)} 字节)")
+            logger.info(
+                f"《{book_name}》 检测编码: {detected_encoding} ({len(raw_bytes)} 字节)"
+            )
 
         # 清理 BOM 残留和零宽字符
         raw_text = raw_text.lstrip("\ufeff").replace("\ufeff", "")
@@ -695,13 +721,17 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
         logger.debug(f"clean_novel_text 完成 (清洗后长度: {len(raw_text)} 字符)")
 
         if len(raw_text) < 500:
-            logger.warning(f"\u300a{book_name}\u300b 清洗后正文不足500字，可能是防盗章节或空文件")
+            logger.warning(
+                f"\u300a{book_name}\u300b 清洗后正文不足500字，可能是防盗章节或空文件"
+            )
 
         logger.debug(f"开始 smart_split_chapters...")
         chapters = smart_split_chapters(raw_text, book_name)
         total_chapters = len(chapters)
         total_words = len(raw_text)
-        logger.info(f"《{book_name}》 章节切分完成: {total_chapters} 章 (总字数: {total_words})")
+        logger.info(
+            f"《{book_name}》 章节切分完成: {total_chapters} 章 (总字数: {total_words})"
+        )
 
         # 生成类型标签：优先使用文件名中的标签，降级到 LLM 生成
         if filename_tags:
@@ -723,7 +753,10 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
 {{"tags": "标签1,标签2,标签3,..."}}
 (要求：标签应包含题材类型、风格特点、目标读者等维度，如：玄幻,升级流,热血,男频)"""
 
-                print(f"  [INFO] 正在通过 LLM 生成类型标签 (首次调用需加载模型，约30-90秒)...", flush=True)
+                print(
+                    f"  [INFO] 正在通过 LLM 生成类型标签 (首次调用需加载模型，约30-90秒)...",
+                    flush=True,
+                )
                 tag_resp = ollama_chat(tag_prompt, 0.3, "A")
                 logger.debug(f"ollama_chat 完成 (响应长度: {len(tag_resp)} 字符)")
                 tag_data = safe_parse_json(tag_resp)
@@ -752,7 +785,9 @@ def process_single_book(book_info: Dict, manifest: Dict, start_from_layer: int =
             ),
         )
         db.commit()
-        logger.info(f"book_metadata 入库完成: {book_name} ({category}, {total_chapters}章, {total_words}字)")
+        logger.info(
+            f"book_metadata 入库完成: {book_name} ({category}, {total_chapters}章, {total_words}字)"
+        )
 
         print(
             f"\n{'='*20} 开始处理：《{book_name}》 (总章数:{total_chapters}) {'='*20}"
@@ -949,6 +984,7 @@ def main():
 
     # 截断验证：确认是否有正文损失
     from core.ollama_client import get_truncation_count
+
     truncations = get_truncation_count()
     if truncations == 0:
         print("\n✅ 截断验证通过：0 次正文截断，所有章节完整喂给 LLM。")
@@ -964,7 +1000,9 @@ def main():
         print(f"      中各取 3 条 writing_quality=9-10 的样本，人工判断是否真的优秀")
         print(f"   2. 如果 9-10 分样本里混了平庸内容 → 虚高，需调整 Stage F prompt")
         print(f"   3. 如果 9-10 分确实优秀 → 评分系统有效，继续积累基准")
-        print(f"   抽查 SQL: SELECT writing_quality, original_text FROM dialogue_samples")
+        print(
+            f"   抽查 SQL: SELECT writing_quality, original_text FROM dialogue_samples"
+        )
         print(f"            WHERE book_name='X' ORDER BY writing_quality DESC LIMIT 3")
         print(f"{'='*60}")
 

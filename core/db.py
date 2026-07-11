@@ -20,7 +20,7 @@ class DatabaseManager:
         "plot_arcs": "(chapter_id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary TEXT, character_state_json TEXT)",
         
         # Stage B: 写作技法
-        "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT, anti_pattern TEXT)",
+        "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT)",
         
         # Stage C: 文风指纹
         "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT, narrative_perspective TEXT, sentence_rhythm TEXT)",
@@ -29,7 +29,7 @@ class DatabaseManager:
         # Stage D: 世界观与人物
         "world_settings": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, module TEXT, entity TEXT, content TEXT, tags TEXT, daily_life TEXT, taboos TEXT, conflict_roots TEXT, geography TEXT, economy TEXT, culture TEXT, causal_chain TEXT, rules_exceptions TEXT)",
         "golden_finger": "(id TEXT PRIMARY KEY, book_name TEXT, name TEXT, type TEXT, abilities TEXT, upgrade_path TEXT, limitations TEXT, cost_layers TEXT, interaction_with_plot TEXT, source_chapter TEXT)",
-        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, fatal_flaw TEXT, symbolism TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, desire_vs_need TEXT, secrets TEXT, fears TEXT, social_masks TEXT, growth_cost TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, arc_trajectory TEXT, internal_dilemma TEXT, decision_pattern TEXT, cognitive_bias TEXT, transformation_trigger TEXT, contrast_design TEXT, archetype_label TEXT, writing_anti_patterns TEXT)",
+        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, fatal_flaw TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, desire_vs_need TEXT, secrets TEXT, fears TEXT, social_masks TEXT, growth_cost TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, arc_trajectory TEXT, internal_dilemma TEXT, decision_pattern TEXT, cognitive_bias TEXT, transformation_trigger TEXT, contrast_design TEXT)",
         "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
         
         # Stage D 扩展: 势力关系网络与设定演变
@@ -52,10 +52,10 @@ class DatabaseManager:
         "character_relationship_dynamics": "(id TEXT PRIMARY KEY, book_name TEXT, character_a TEXT, character_b TEXT, timeline_json TEXT)",
         
         # Stage H: 全书宏观分析
-        "book_structure": "(id TEXT PRIMARY KEY, book_name TEXT, structure_type TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)",
+        "book_structure": "(id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)",
         "plot_lines": "(id TEXT PRIMARY KEY, book_name TEXT, line_type TEXT, theme TEXT, chapter_distribution TEXT, milestones_json TEXT)",
         "emotional_arc": "(id TEXT PRIMARY KEY, book_name TEXT, arc_data_json TEXT)",
-        "climax_point_distribution": "(id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT, rhythm_pattern TEXT)",
+        "climax_point_distribution": "(id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT)",
         "symbol_system": "(id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)",
         
         # Stage F 扩展: 转场样本与风格总结

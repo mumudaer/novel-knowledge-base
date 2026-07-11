@@ -560,7 +560,7 @@ class StageD(BaseStage):
         for cp in results.get("character_profiles", []):
             cp_id = generate_id(cp["book_name"], cp["name"], "profile")
             cursor.execute(
-                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     cp_id,
                     cp["book_name"],
@@ -574,7 +574,6 @@ class StageD(BaseStage):
                     cp.get("motivation", ""),
                     cp.get("internal_conflict", ""),
                     cp.get("fatal_flaw", ""),
-                    cp.get("symbolism", ""),
                     cp.get("personality", ""),
                     cp.get("relation_to_mc", "未知"),
                     cp.get("relations_to_others", ""),
@@ -595,8 +594,7 @@ class StageD(BaseStage):
                     cp.get("cognitive_bias", ""),
                     cp.get("transformation_trigger", ""),
                     cp.get("contrast_design", ""),
-                    cp.get("archetype_label", ""),
-                    cp.get("writing_anti_patterns", ""),
+                    
                 ),
             )
             stats["character_profiles"] += 1

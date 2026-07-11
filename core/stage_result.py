@@ -24,7 +24,7 @@ class StageResult:
     def get_summary(self) -> Dict[str, Any]:
         """获取执行摘要"""
         return {
-            "success_count": sum(len(v) for v in self.data.values()),
+            "success_count": sum(len(v) for v in self.data.values() if v is not None),
             "failure_count": len(self.failures),
             "failures": self.failures[:10],  # 只返回前10个失败记录
         }

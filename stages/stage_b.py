@@ -225,7 +225,7 @@ class StageB(BaseStage):
                 )
                 tags = f"{res.get('scene_type', '')}|{skill.get('skill_name', '')}"
                 cursor.execute(
-                    "INSERT OR REPLACE INTO skills VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO skills VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         skill_id,
                         res["book_name"],
@@ -236,7 +236,6 @@ class StageB(BaseStage):
                         skill.get("analysis", ""),
                         skill.get("original_example", ""),
                         tags,
-                        skill.get("anti_pattern", ""),
                     ),
                 )
                 stats["skills_db"] += 1
