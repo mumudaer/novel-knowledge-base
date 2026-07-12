@@ -567,9 +567,8 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
         if bs_row:
             style_info.extend(
                 [
-                    f"结构类型：{bs_row[0]}",
-                    f"表层主题：{bs_row[1]}",
-                    f"深层主题：{bs_row[2]}",
+                    f"表层主题：{bs_row[0]}",
+                    f"深层主题：{bs_row[1]}",
                 ]
             )
 
