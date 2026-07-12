@@ -6,6 +6,7 @@ Stage C: 文风指纹与感官映射提取
 import logging
 import math
 import re
+import os
 from typing import List, Dict, Any
 from stages.base import BaseStage
 from core.ollama_client import ollama_chat, safe_parse_json
@@ -110,26 +111,27 @@ class StageC(BaseStage):
         if completed_ids:
             print(f"✅ [阶段C] 恢复断点：已完成 {len(completed_ids)} 章")
 
-        # 均匀间隔采样：文风全书一致，无需全量处理
-        import math
+        # 均匀间隔采样（--full 模式下全量处理）
+        if not os.environ.get("NOVEL_KB_FULL_SAMPLE"):
+            import math
 
-        total = len(chapters)
-        sample_count = max(
-            STAGE_SAMPLE_BASE,
-            min(
-                total,
-                int(
-                    STAGE_SAMPLE_BASE
-                    + STAGE_SAMPLE_MULTIPLIER
-                    * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+            total = len(chapters)
+            sample_count = max(
+                STAGE_SAMPLE_BASE,
+                min(
+                    total,
+                    int(
+                        STAGE_SAMPLE_BASE
+                        + STAGE_SAMPLE_MULTIPLIER
+                        * math.sqrt(total / STAGE_SAMPLE_DENOMINATOR)
+                    ),
                 ),
-            ),
-        )
-        if total > sample_count:
-            step = total / sample_count
-            sampled = [chapters[int(i * step)] for i in range(sample_count)]
-            logger.info(f"[阶段C] 均匀采样: {sample_count}/{total} 章")
-            chapters = sampled
+            )
+            if total > sample_count:
+                step = total / sample_count
+                sampled = [chapters[int(i * step)] for i in range(sample_count)]
+                logger.info(f"[阶段C] 均匀采样: {sample_count}/{total} 章")
+                chapters = sampled
 
         pending = [c for c in chapters if c["id"] not in completed_ids]
         if not pending:

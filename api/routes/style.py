@@ -247,7 +247,7 @@ def get_book_statistics(
                "min_chapter_words", "max_chapter_words", "median_chapter_words",
                "dialogue_ratio", "description_ratio", "avg_paragraph_length",
                "short_para_ratio", "medium_para_ratio", "long_para_ratio",
-               "rhythm_pattern"]
+               ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}

@@ -574,13 +574,7 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
             )
 
         # 从 climax_point_distribution 表取数据
-        cursor.execute(
-            "SELECT rhythm_pattern FROM climax_point_distribution WHERE book_name = ? LIMIT 1",
-            (book_name,),
-        )
-        cpd_row = cursor.fetchone()
-        if cpd_row:
-            style_info.append(f"节奏模式：{cpd_row[0]}")
+        # rhythm_pattern column removed
 
         author_desc = " | ".join(
             [s for s in style_info if s and "：" in s and s.split("：", 1)[1]]

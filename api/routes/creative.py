@@ -122,7 +122,7 @@ def search_character(
     columns = [
         "id", "book_name", "author", "category", "name", "role_type",
         "appearance", "quirks", "identity", "motivation", "internal_conflict",
-        "fatal_flaw", "symbolism", "personality", "relation_to_mc",
+        "fatal_flaw", "personality", "relation_to_mc",
         "relations_to_others", "climax_or_fate", "background",
         "desire_vs_need", "secrets", "fears", "social_masks",
         "growth_cost", "speech_samples", "behavior_samples",
@@ -314,7 +314,6 @@ def search_style(
 @router.get("/search/plot")
 def search_plot(
     query: Optional[str] = Query(None, description="语义搜索关键词（如：三幕结构设计/冲突升级方式）"),
-    structure_type: Optional[str] = Query(None, description="结构类型过滤（三幕结构/英雄之旅/多线交织）"),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -334,13 +333,11 @@ def search_plot(
     if book_name:
         sql += " AND book_name = ?"
         params.append(book_name)
-    if structure_type:
-        sql += " AND structure_type LIKE ?"
-        params.append(f"%{structure_type}%")
+    # structure_type column removed
     sql += f" LIMIT {limit}"
     cursor.execute(sql, params)
     rows = cursor.fetchall()
-    cols = ["id", "book_name", "structure_type", "act_breakdown_json", "surface_theme", "deep_theme"]
+    cols = ["id", "book_name", "act_breakdown_json", "surface_theme", "deep_theme"]
     structures = []
     for row in rows:
         item = dict(zip(cols, row))
@@ -493,7 +490,7 @@ def search_plot(
     result_sections["information_management"] = [dict(zip(cols, r)) for r in rows]
 
     total = sum(len(v) for v in result_sections.values())
-    _log_search("default", "plot", query or structure_type or "", total)
+    _log_search("default", "plot", query or "", total)
 
     return {
         "success": True,
@@ -719,7 +716,7 @@ def search_comprehensive(req: ComprehensiveSearchRequest):
         # plot 维度走结构化查询（基于关键词提取）
         if dimension == "plot":
             cursor.execute(
-                "SELECT book_name, structure_type, surface_theme, deep_theme FROM book_structure LIMIT ?",
+                "SELECT book_name, surface_theme, deep_theme FROM book_structure LIMIT ?",
                 (req.limit,),
             )
             rows = cursor.fetchall()
@@ -767,10 +764,10 @@ def search_by_book(
     overview["sections"]["character_profiles"] = [{"name": r[0], "role_type": r[1]} for r in cursor.fetchall()]
 
     # 全书结构
-    cursor.execute("SELECT structure_type, surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1", (book_name,))
+    cursor.execute("SELECT surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1", (book_name,))
     row = cursor.fetchone()
     if row:
-        overview["sections"]["book_structure"] = {"structure_type": row[0], "surface_theme": row[1], "deep_theme": row[2]}
+        overview["sections"]["book_structure"] = {"surface_theme": row[0], "deep_theme": row[1]}
 
     # 主线
     cursor.execute("SELECT theme FROM plot_lines WHERE book_name=? AND line_type='main' LIMIT 1", (book_name,))
@@ -1589,9 +1586,9 @@ def context_aware_push(req: ContextPushRequest):
     # 查询结构建议
     structure_table_configs = {
         "book_structure": {
-            "columns": ["book_name", "structure_type", "surface_theme", "deep_theme"],
+            "columns": ["book_name", "surface_theme", "deep_theme"],
             "search_fields": ["surface_theme", "deep_theme"],
-            "transform": lambda row: {"type": "structure", "book_name": row["book_name"], "structure_type": row["structure_type"], "surface_theme": row["surface_theme"], "deep_theme": row["deep_theme"]},
+            "transform": lambda row: {"type": "structure", "book_name": row["book_name"], "surface_theme": row["surface_theme"], "deep_theme": row["deep_theme"]},
         },
         "macro_outlines": {
             "columns": ["book_name", "volume_index", "theme", "conflict"],

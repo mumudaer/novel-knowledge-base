@@ -17,7 +17,7 @@ def get_book_structure(
     query: Optional[str] = Query(None, description="语义搜索关键词（如：三幕结构/英雄之旅）"),
 ):
     """查询全书结构（三幕/多幕）- 支持混合检索"""
-    columns = ["id", "book_name", "structure_type", "act_breakdown_json", "surface_theme", "deep_theme"]
+    columns = ["id", "book_name", "act_breakdown_json", "surface_theme", "deep_theme"]
     
     filters = {"book_name": book_name}
     results = hybrid_search(
@@ -134,7 +134,7 @@ def get_climax_points(
     )
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "distribution_json", "rhythm_pattern"]
+    columns = ["id", "book_name", "distribution_json"]
     results = []
     for row in rows:
         item = dict(zip(columns, row))

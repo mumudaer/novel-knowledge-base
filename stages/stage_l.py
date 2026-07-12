@@ -44,7 +44,7 @@ class StageL(BaseStage):
             "世界观设计": ("world_settings", "module"),
             "对话风格": ("character_speech_style", "character_name"),
             "描写技法": ("description_samples", "description_type"),
-            "结构编排": ("book_structure", "structure_type"),
+            "结构编排": ("book_structure", "surface_theme"),
             "信息管理": ("information_management", "strategy_type"),
             "伏笔设计": ("plot_foreshadowing", "hook_name"),
         }
@@ -305,7 +305,7 @@ class StageL(BaseStage):
             
             elif comparison_dimension == "结构编排":
                 cursor.execute(
-                    "SELECT structure_type, act_breakdown_json, surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1",
+                    "SELECT act_breakdown_json, surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1",
                     (book_name,),
                 )
                 row = cursor.fetchone()

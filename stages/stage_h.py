@@ -358,7 +358,6 @@ class StageH(BaseStage):
                     result["book_structure"] = [
                         {
                             "book_name": self.book_name,
-                            "structure_type": structure.get("structure_type", "未知"),
                             "surface_theme": structure.get("surface_theme", ""),
                             "deep_theme": structure.get("deep_theme", ""),
                             "act_breakdown": structure.get("act_breakdown", []),
@@ -843,11 +842,10 @@ class StageH(BaseStage):
         for bs in results.get("book_structure", []):
             bs_id = generate_id(bs["book_name"], "structure")
             cursor.execute(
-                "INSERT OR REPLACE INTO book_structure VALUES (?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO book_structure VALUES (?,?,?,?,?)",
                 (
                     bs_id,
                     bs["book_name"],
-                    bs.get("structure_type", ""),
                     json.dumps(bs.get("act_breakdown", []), ensure_ascii=False),
                     bs.get("surface_theme", ""),
                     bs.get("deep_theme", ""),
@@ -888,12 +886,11 @@ class StageH(BaseStage):
         for cpd in results.get("climax_point_distribution", []):
             cpd_id = generate_id(cpd["book_name"], "climax_points")
             cursor.execute(
-                "INSERT OR REPLACE INTO climax_point_distribution VALUES (?,?,?,?)",
+                "INSERT OR REPLACE INTO climax_point_distribution VALUES (?,?,?)",
                 (
                     cpd_id,
                     cpd["book_name"],
                     json.dumps(cpd.get("distribution", []), ensure_ascii=False),
-                    cpd.get("rhythm_pattern", ""),
                 ),
             )
             stats["climax_point_distribution"] += 1

@@ -6,6 +6,7 @@ Stage D: 世界观与人物深度自动提取（重做版）
 
 import json
 import math
+import os
 import logging
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,12 +38,15 @@ class StageD(BaseStage):
             return chapters
 
         sampled_indices = set()
-        sampled_indices.add(0)                    # 首章
-        sampled_indices.add(len(chapters) - 1)     # 尾章
+        sampled_indices.add(0)  # 首章
+        sampled_indices.add(len(chapters) - 1)  # 尾章
 
         # 均匀间隔：目标采样数用开方公式
         import math
-        target = max(10, min(len(chapters), int(10 + 5 * math.sqrt(len(chapters) / 100))))
+
+        target = max(
+            10, min(len(chapters), int(10 + 5 * math.sqrt(len(chapters) / 100)))
+        )
         step = max(2, (len(chapters) - 2) // (target - 2))
         for i in range(step, len(chapters) - 1, step):
             sampled_indices.add(i)
@@ -56,9 +60,16 @@ class StageD(BaseStage):
         )
         return sampled_chapters
 
-    def _extract_world_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
+    def _extract_world_group(
+        self, text: str, chap_id: str, stage_result=None
+    ) -> Dict[str, List[Dict]]:
         """提取世界观组：world_settings + world_timeline + faction_networks"""
-        result = {"world_settings": [], "world_timeline": [], "faction_networks": [], "golden_finger": None}
+        result = {
+            "world_settings": [],
+            "world_timeline": [],
+            "faction_networks": [],
+            "golden_finger": None,
+        }
 
         prompt = f"""你是顶级的文学世界观架构师。请根据本书的实际题材，从以下章节文本中提取【世界观设定（7维度+金手指体系）】、【历史编年史】和【势力关系网络】。
 
@@ -189,10 +200,12 @@ class StageD(BaseStage):
             logger.warning(f"⚠️ [阶段D-世界观] 解析章节 {chap_id} 失败: {e}")
             if stage_result:
                 stage_result.add_failure(chap_id, str(e), "D-world")
-        
+
         return result
 
-    def _extract_character_group(self, text: str, chap_id: str, stage_result=None) -> Dict[str, List[Dict]]:
+    def _extract_character_group(
+        self, text: str, chap_id: str, stage_result=None
+    ) -> Dict[str, List[Dict]]:
         """提取人物核心档案（14字段，从单chunk可准确判断）"""
         result = {"character_profiles": []}
 
@@ -246,7 +259,13 @@ class StageD(BaseStage):
                                 "internal_conflict": cp.get("internal_conflict", ""),
                                 "personality": cp.get("personality", ""),
                                 "relation_to_mc": cp.get("relation_to_mc", "未知"),
-                                "abilities": json.dumps(cp.get("abilities", ""), ensure_ascii=False) if isinstance(cp.get("abilities"), list) else cp.get("abilities", ""),
+                                "abilities": (
+                                    json.dumps(
+                                        cp.get("abilities", ""), ensure_ascii=False
+                                    )
+                                    if isinstance(cp.get("abilities"), list)
+                                    else cp.get("abilities", "")
+                                ),
                                 "speech_samples": cp.get("speech_samples", ""),
                                 "behavior_samples": cp.get("behavior_samples", ""),
                                 "climax_or_fate": cp.get("climax_or_fate", ""),
@@ -257,10 +276,12 @@ class StageD(BaseStage):
             logger.warning(f"⚠️ [阶段D-人物] 解析章节 {chap_id} 失败: {e}")
             if stage_result:
                 stage_result.add_failure(chap_id, str(e), "D-character")
-        
+
         return result
 
-    def _aggregate_characters(self, profiles: List[Dict], chapters: List[Dict]) -> Dict[str, tuple]:
+    def _aggregate_characters(
+        self, profiles: List[Dict], chapters: List[Dict]
+    ) -> Dict[str, tuple]:
         """按人物名聚合核心字段 + 原文片段，返回 {name: (core_text, chapter_refs, raw_snippets)}"""
         chap_text_map = {c.get("id", ""): c.get("text", "") for c in chapters}
         agg = {}
@@ -293,7 +314,9 @@ class StageD(BaseStage):
             for name, d in agg.items()
         }
 
-    def _extend_character(self, name: str, core_text: str, chapters: List[Dict], raw_snippets: str = ""):
+    def _extend_character(
+        self, name: str, core_text: str, chapters: List[Dict], raw_snippets: str = ""
+    ):
         """基于聚合核心档案提取扩展19字段，回填到所有该人物的记录中"""
         if not core_text.strip():
             return
@@ -327,7 +350,6 @@ class StageD(BaseStage):
             return
         for chap in chapters:
             chap["fatal_flaw"] = data.get("fatal_flaw", "")
-            chap["symbolism"] = data.get("symbolism", "")
             chap["relations_to_others"] = data.get("relations_to_others", "")
             chap["desire_vs_need"] = data.get("desire_vs_need", "")
             chap["secrets"] = data.get("secrets", "")
@@ -341,9 +363,7 @@ class StageD(BaseStage):
             chap["cognitive_bias"] = data.get("cognitive_bias", "")
             chap["transformation_trigger"] = data.get("transformation_trigger", "")
             chap["contrast_design"] = data.get("contrast_design", "")
-            chap["archetype_label"] = data.get("archetype_label", "")
-            chap["writing_anti_patterns"] = data.get("writing_anti_patterns", "")
-
+                        
     def _process_single_chapter(self, chap: Dict) -> Dict[str, List[Dict]]:
         """
         处理单章：提取世界观组 + 人物组（线程安全）
@@ -385,17 +405,31 @@ class StageD(BaseStage):
         stage_result = StageResult()
         logger.info(f"=== 阶段四：世界观与人物深度自动提取 ({self.book_name}) ===")
 
-        DATA_KEYS = ["world_settings", "character_profiles", "world_timeline", "faction_networks"]
+        DATA_KEYS = [
+            "world_settings",
+            "character_profiles",
+            "world_timeline",
+            "faction_networks",
+        ]
         result = {key: [] for key in DATA_KEYS}
         result["golden_finger"] = None  # 单独处理，不是 list
 
         # 智能采样
-        sampled_chapters = self._select_sample_chapters(chapters)
+        # 智能采样（--full 模式下全量处理）
+        if os.environ.get("NOVEL_KB_FULL_SAMPLE"):
+            sampled_chapters = chapters
+            logger.info(f"[阶段D] --full 全量模式: {len(chapters)} 章")
+        else:
+            sampled_chapters = self._select_sample_chapters(chapters)
 
         # 断点恢复
         cache = self.load_cache()
         completed_items = cache.get("data", []) if cache else []
-        completed_ids = {item.get("_chapter_id", "") for item in completed_items if item.get("_chapter_id")}
+        completed_ids = {
+            item.get("_chapter_id", "")
+            for item in completed_items
+            if item.get("_chapter_id")
+        }
 
         for item in completed_items:
             for key in DATA_KEYS:
@@ -405,24 +439,37 @@ class StageD(BaseStage):
                 result["golden_finger"] = item["golden_finger"]
 
         if completed_ids:
-            logger.info(f"✅ [阶段D] 恢复断点：已完成 {len(completed_ids)}/{len(sampled_chapters)} 章")
+            logger.info(
+                f"✅ [阶段D] 恢复断点：已完成 {len(completed_ids)}/{len(sampled_chapters)} 章"
+            )
 
         pending = [c for c in sampled_chapters if c.get("id") not in completed_ids]
         if not pending:
             logger.info(f"[阶段D] 所有采样章节已处理完毕")
         else:
             workers = min(STAGE_D_WORKERS, len(pending))
-            logger.info(f"[阶段D] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 个采样章节")
-            print(f"  [Stage D] 首次调用需加载 qwen14b 模型到显存 (约30-60秒)，请稍候...", flush=True)
+            logger.info(
+                f"[阶段D] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 个采样章节"
+            )
+            print(
+                f"  [Stage D] 首次调用需加载 qwen14b 模型到显存 (约30-60秒)，请稍候...",
+                flush=True,
+            )
 
             processed_count = 0
             with ThreadPoolExecutor(max_workers=max(workers, 1)) as executor:
                 futures = {
-                    executor.submit(self._process_single_chapter, chap): chap.get("id", "unknown")
+                    executor.submit(self._process_single_chapter, chap): chap.get(
+                        "id", "unknown"
+                    )
                     for chap in pending
                 }
                 try:
-                    for future in tqdm(as_completed(futures), total=len(futures), desc="提取世界观与人物"):
+                    for future in tqdm(
+                        as_completed(futures),
+                        total=len(futures),
+                        desc="提取世界观与人物",
+                    ):
                         chap_id = futures[future]
                         try:
                             chapter_result = future.result()
@@ -431,8 +478,12 @@ class StageD(BaseStage):
                             for key in DATA_KEYS:
                                 result[key].extend(chapter_result.get(key, []))
                             # golden_finger 单独处理（只保留第一个有效结果）
-                            if not result["golden_finger"] and chapter_result.get("golden_finger"):
-                                result["golden_finger"] = chapter_result["golden_finger"]
+                            if not result["golden_finger"] and chapter_result.get(
+                                "golden_finger"
+                            ):
+                                result["golden_finger"] = chapter_result[
+                                    "golden_finger"
+                                ]
                             processed_count += 1
                             if processed_count % 5 == 0:
                                 self.save_cache({"data": completed_items})
@@ -440,7 +491,9 @@ class StageD(BaseStage):
                             logger.warning(f"⚠️ [阶段D] 章节 {chap_id} 处理失败: {e}")
                             stage_result.add_failure(chap_id, str(e), "D")
                 except KeyboardInterrupt:
-                    logger.info(f"[阶段D] 用户中断，保存进度 ({len(completed_items)} 章已完成)...")
+                    logger.info(
+                        f"[阶段D] 用户中断，保存进度 ({len(completed_items)} 章已完成)..."
+                    )
                     self.save_cache({"data": completed_items})
                     raise
 
@@ -451,7 +504,9 @@ class StageD(BaseStage):
         if char_profiles:
             aggregated = self._aggregate_characters(char_profiles, chapters)
             if aggregated:
-                logger.info(f"[阶段D] Phase2: 提取 {len(aggregated)} 个人物的扩展字段...")
+                logger.info(
+                    f"[阶段D] Phase2: 提取 {len(aggregated)} 个人物的扩展字段..."
+                )
                 for name, (core_text, chaps, raw_snippets) in aggregated.items():
                     try:
                         self._extend_character(name, core_text, chaps, raw_snippets)
@@ -546,13 +601,18 @@ class StageD(BaseStage):
             gf_id = generate_id(gf["book_name"], "golden_finger", gf["name"])
             cursor.execute(
                 "INSERT OR REPLACE INTO golden_finger VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (gf_id, gf["book_name"], gf["name"], gf.get("type", ""),
-                 json.dumps(gf.get("abilities", []), ensure_ascii=False),
-                 gf.get("upgrade_path", ""),
-                 json.dumps(gf.get("limitations", []), ensure_ascii=False),
-                 json.dumps(gf.get("cost_layers", []), ensure_ascii=False),
-                 gf.get("interaction_with_plot", ""),
-                 gf.get("source_chapter", "")),
+                (
+                    gf_id,
+                    gf["book_name"],
+                    gf["name"],
+                    gf.get("type", ""),
+                    json.dumps(gf.get("abilities", []), ensure_ascii=False),
+                    gf.get("upgrade_path", ""),
+                    json.dumps(gf.get("limitations", []), ensure_ascii=False),
+                    json.dumps(gf.get("cost_layers", []), ensure_ascii=False),
+                    gf.get("interaction_with_plot", ""),
+                    gf.get("source_chapter", ""),
+                ),
             )
             stats["golden_finger"] = 1
 
@@ -594,7 +654,6 @@ class StageD(BaseStage):
                     cp.get("cognitive_bias", ""),
                     cp.get("transformation_trigger", ""),
                     cp.get("contrast_design", ""),
-                    
                 ),
             )
             stats["character_profiles"] += 1

@@ -70,7 +70,6 @@ class CharacterProfileItem(BaseModel):
     motivation: str = ""
     internal_conflict: str = ""
     fatal_flaw: str = ""
-    symbolism: str = ""
     personality: str = ""
     relation_to_mc: str = ""
     relations_to_others: str = ""
@@ -114,7 +113,6 @@ class PlotStructureQuery(BaseModel):
 
 class BookStructureItem(BaseModel):
     book_name: str
-    structure_type: str
     act_breakdown_json: str
     surface_theme: str = ""
     deep_theme: str = ""
@@ -136,7 +134,6 @@ class EmotionalArcItem(BaseModel):
 class CoolPointItem(BaseModel):
     book_name: str
     distribution_json: str
-    rhythm_pattern: str
 
 
 class ForeshadowingItem(BaseModel):
@@ -255,4 +252,3 @@ class BookStatisticsItem(BaseModel):
     short_para_ratio: float
     medium_para_ratio: float
     long_para_ratio: float
-    rhythm_pattern: str
