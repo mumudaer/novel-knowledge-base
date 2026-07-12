@@ -560,7 +560,7 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
 
         # 从 book_structure 表取数据
         cursor.execute(
-            "SELECT structure_type, surface_theme, deep_theme FROM book_structure WHERE book_name = ? LIMIT 1",
+            "SELECT surface_theme, deep_theme FROM book_structure WHERE book_name = ? LIMIT 1",
             (book_name,),
         )
         bs_row = cursor.fetchone()

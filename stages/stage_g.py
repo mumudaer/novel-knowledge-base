@@ -93,12 +93,14 @@ class StageG(BaseStage):
             # 取样本章节（--full 模式下全量；默认6章，每章前900字）
             sample_limit = None if os.environ.get("NOVEL_KB_FULL_SAMPLE") else 6
             sample_chapters = char_chapters[:sample_limit]
-            sample_text = "\n\n".join(
-                [
-                    f"【{c.get('id', '')}】\n{c.get('text', '')[:900]}"
-                    for c in sample_chapters
-                ]
-            )
+            # 硬上限：num_ctx=14336, budget≈3976字, 每人最多 5 章 × 900 字
+            max_sample_chars = 3800
+            sample_text = ""
+            for c in sample_chapters:
+                snippet = f"【{c.get('id', '')}】\n{c.get('text', '')[:900]}"
+                if len(sample_text) + len(snippet) > max_sample_chars:
+                    break
+                sample_text += snippet + "\n\n"
 
             prompt = f"""你是顶级的人物塑造大师与文学分析师。请根据以下章节片段，深度分析人物【{char_name}】的语言风格、行为标志和关系动态。
 

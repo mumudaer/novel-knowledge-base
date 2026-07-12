@@ -52,10 +52,10 @@ class DatabaseManager:
         "character_relationship_dynamics": "(id TEXT PRIMARY KEY, book_name TEXT, character_a TEXT, character_b TEXT, timeline_json TEXT)",
         
         # Stage H: 全书宏观分析
-        "book_structure": "(id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)",
+        "book_structure": "(id TEXT PRIMARY KEY, book_name TEXT, structure_type TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)",
         "plot_lines": "(id TEXT PRIMARY KEY, book_name TEXT, line_type TEXT, theme TEXT, chapter_distribution TEXT, milestones_json TEXT)",
         "emotional_arc": "(id TEXT PRIMARY KEY, book_name TEXT, arc_data_json TEXT)",
-        "climax_point_distribution": "(id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT)",
+        "climax_point_distribution": "(id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT, rhythm_pattern TEXT)",
         "symbol_system": "(id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)",
         
         # Stage F 扩展: 转场样本与风格总结
