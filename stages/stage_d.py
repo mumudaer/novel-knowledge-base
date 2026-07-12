@@ -670,7 +670,6 @@ class StageD(BaseStage):
                 f"动机:{cp.get('motivation', '')}\n"
                 f"内心冲突/弧光:{cp.get('internal_conflict', '无')}\n"
                 f"性格缺陷/悲剧根源:{cp.get('fatal_flaw', '无')}\n"
-                f"象征意义/隐喻:{cp.get('symbolism', '无')}\n"
                 f"性格:{cp.get('personality', '')}\n"
                 f"与主角关系:{cp.get('relation_to_mc', '未知')}\n"
                 f"与其他配角关系:{cp.get('relations_to_others', '无')}\n"

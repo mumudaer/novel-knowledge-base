@@ -225,9 +225,6 @@ class StageH(BaseStage):
 
             if key == "book_structure" and items:
                 struct = items[0]
-                context_lines.append(
-                    f"- 结构类型: {struct.get('structure_type', '未知')}"
-                )
                 context_lines.append(f"- 表层主题: {struct.get('surface_theme', '')}")
                 context_lines.append(f"- 深层主题: {struct.get('deep_theme', '')}")
 
@@ -251,7 +248,6 @@ class StageH(BaseStage):
                 dist = items[0]
                 climax_points = dist.get("distribution", [])
                 context_lines.append(f"- 高潮点数量: {len(climax_points)}")
-                context_lines.append(f"- 节奏模式: {dist.get('rhythm_pattern', '')}")
 
             elif key == "symbol_system" and items:
                 symbols = items[0].get("symbols", [])
@@ -292,7 +288,6 @@ class StageH(BaseStage):
 请输出纯 JSON 格式：
 {{
   "book_structure": {{
-    "structure_type": "结构类型(三幕结构/英雄之旅/多线交织/环形结构/非线性叙事)",
     "surface_theme": "表层主题(20字内)",
     "deep_theme": "深层主题(30字内)",
     "act_breakdown": [
@@ -336,7 +331,6 @@ class StageH(BaseStage):
         "intensity": 7
       }}
     ],
-    "rhythm_pattern": "节奏模式"
   }},
   "symbol_system": [
     {{
@@ -406,7 +400,6 @@ class StageH(BaseStage):
                         {
                             "book_name": self.book_name,
                             "distribution": climax_points.get("climax_points", []),
-                            "rhythm_pattern": climax_points.get("rhythm_pattern", ""),
                         }
                     ]
 
