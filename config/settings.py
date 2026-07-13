@@ -61,7 +61,7 @@ STAGE_CTX_WORKERS = 2  # 7b 模型，双并发（轻量级场景识别）
 OLLAMA_NUM_CTX_7B = 12288  # 7b/9b 通用上下文（足够容纳 3500 字章节 + 模板）
 # 14b KV cache: 192 KB/token → 14336 tokens ≈ 2.8 GB, model ~9 GB → 总计 ~12 GB
 OLLAMA_NUM_CTX_14B = (
-    14336  # 配合 SPLIT_THRESHOLD=5000, 每块≤5000字, 14b@14336 safe=6493 chars
+    16384  # 14336时D-char budget=3543勉强，升至16384→safe=7859chars→budget=4909>3500 ✅
 )
 OLLAMA_NUM_PREDICT = 2048  # 最大生成长度
 OLLAMA_TIMEOUT = 300  # 超时时间（秒）（14b正常60-120s/次，300s已含2.5-5x余量）
