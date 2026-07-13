@@ -115,17 +115,23 @@ class StageH(BaseStage):
         # 分三组顺序调用，前一组结果作为上下文传递给后续组
         logger.info("📊 [阶段H] 开始分组提取（结构组/技法组/类型组）...")
 
+        # 断点恢复
+        cache = self.load_cache()
+        groups_done = set(cache.get("groups_done", [])) if cache else set()
+
         # 第一组：结构组
-        structure_data = self._extract_structure_group(summaries_text, volumes_text)
-        for key in [
-            "book_structure",
-            "plot_lines",
-            "emotional_arc",
-            "climax_point_distribution",
-            "symbol_system",
-        ]:
-            if key in structure_data:
-                result[key] = structure_data[key]
+        if "structure" not in groups_done:
+            structure_data = self._extract_structure_group(summaries_text, volumes_text)
+            for key in [
+                "book_structure", "plot_lines", "emotional_arc",
+                "climax_point_distribution", "symbol_system",
+            ]:
+                if key in structure_data:
+                    result[key] = structure_data[key]
+            groups_done.add("structure")
+            self.save_cache({"groups_done": list(groups_done), "result": result})
+        else:
+            logger.info("✅ [阶段H] 结构组已完成，跳过")
 
         # 构建结构组摘要，供后续组参考
         structure_context = self._build_group_context(structure_data)
