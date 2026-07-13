@@ -23,7 +23,7 @@ class DatabaseManager:
         "skills": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, scene_type TEXT, skill_name TEXT, analysis TEXT, original_example TEXT, tags TEXT)",
         
         # Stage C: 文风指纹
-        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, negative_prompts TEXT, narrative_perspective TEXT, sentence_rhythm TEXT)",
+        "author_fingerprints": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, verbs TEXT, adjectives TEXT, imagery TEXT, transitions TEXT, narrative_perspective TEXT, sentence_rhythm TEXT)",
         "sensory_mappings": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, emotion TEXT, show_not_tell TEXT, analysis TEXT)",
         
         # Stage D: 世界观与人物
@@ -38,7 +38,7 @@ class DatabaseManager:
         
         # Stage E: 宏观大纲
         "macro_outlines": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, volume_index INTEGER, chapter_range TEXT, theme TEXT, conflict TEXT, beats_json TEXT, arc TEXT)",
-        "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, payoff_timing TEXT, scope_type TEXT, resolved_chapter TEXT, resolution_excerpt TEXT, last_advanced_chapter TEXT)",
+        "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, payoff_timing TEXT, scope_type TEXT, resolved_chapter TEXT, last_advanced_chapter TEXT)",
         "entity_state_tracker": "(id TEXT PRIMARY KEY, book_name TEXT, entity_name TEXT, chapter_range TEXT, current_state_json TEXT)",
         "chapter_functions": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, function_type TEXT, pacing_type TEXT, structure_pattern_json TEXT, hook_type TEXT, hook_intensity TEXT, hook_content TEXT, cool_point_type TEXT, arc_length TEXT, information_gap_json TEXT, active_plotlines TEXT)",
         
@@ -65,7 +65,7 @@ class DatabaseManager:
         # Stage H 扩展: 信息揭露节奏、章节模式、情感转变铺垫
         "revelation_pacing": "(id TEXT PRIMARY KEY, book_name TEXT, revelation_name TEXT, reveal_chapter TEXT, reveal_method TEXT, impact TEXT)",
         "chapter_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, opening_patterns TEXT, ending_patterns TEXT, common_transitions TEXT)",
-        "emotion_transition_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, transition_type TEXT, foreshadowing_method TEXT, original_example TEXT)",
+        "emotion_transition_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, transition_type TEXT, foreshadowing_method TEXT)",
         
         # Stage H 扩展: 信息管理策略、高潮构建链、冲突升级阶梯
         "information_management": "(id TEXT PRIMARY KEY, book_name TEXT, strategy_type TEXT, target_info TEXT, conceal_method TEXT, reveal_timing TEXT, dramatic_purpose TEXT)",
@@ -74,7 +74,7 @@ class DatabaseManager:
         
         # Stage F 扩展: 叙事距离控制与 Show vs Tell 策略
         "narrative_distance": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, distance_type TEXT, trigger_reason TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
-        "show_tell_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, pattern_type TEXT, ratio_estimate TEXT, switching_triggers TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
+        "show_tell_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, pattern_type TEXT, switching_triggers TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # Stage I: 纯统计模块
         "book_statistics": "(id TEXT PRIMARY KEY, book_name TEXT, total_words INTEGER, avg_chapter_words INTEGER, min_chapter_words INTEGER, max_chapter_words INTEGER, median_chapter_words INTEGER, dialogue_ratio REAL, description_ratio REAL, avg_paragraph_length REAL, short_para_ratio REAL, medium_para_ratio REAL, long_para_ratio REAL, rhythm_pattern TEXT)",
@@ -87,13 +87,13 @@ class DatabaseManager:
         "mystery_clues": "(id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, reasoning_chain_json TEXT, twist_design TEXT)",
         
         # 恐惧/氛围构建链（克苏鲁/恐怖/悬疑）
-        "fear_building": "(id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT, original_example TEXT)",
+        "fear_building": "(id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT)",
         
         # 升级/成长体系（玄幻/仙侠/游戏竞技/职场）
         "progression_systems": "(id TEXT PRIMARY KEY, book_name TEXT, system_type TEXT, levels_json TEXT, upgrade_conditions_json TEXT, power_comparison_json TEXT, milestones_json TEXT, growth_pattern TEXT)",
         
         # 类型特定技法（通用灵活表，通过 genre_tag 区分类型）
-        "genre_specific_techniques": "(id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT, original_example TEXT, applicable_scenarios TEXT)",
+        "genre_specific_techniques": "(id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT)",
         
         # 动作/战斗场景范文（武侠/玄幻/竞技）
         "action_scene_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, action_type TEXT, original_text TEXT, technique_analysis TEXT, pacing_analysis TEXT, sensory_details TEXT, writing_quality INTEGER DEFAULT 5)",
@@ -112,7 +112,7 @@ class DatabaseManager:
         "memorable_quotes": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, quote_text TEXT, context TEXT, technique_analysis TEXT, quote_type TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # 多视角切换模式
-        "pov_switching_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT, original_example TEXT)",
+        "pov_switching_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT)",
         
         # ===== 知识库搜索支撑层 =====
         # 正文质量评审（评审结果存储在知识库侧，方便历史对比）

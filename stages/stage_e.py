@@ -3,6 +3,7 @@ Stage E: 宏观大纲与卷节拍聚合 + 章节功能分类
 使用 qwen2.5:7b 模型，将单章摘要聚合为卷大纲，并分析章节功能
 """
 import json
+import re
 import logging
 from typing import List, Dict, Any
 from tqdm import tqdm
@@ -11,6 +12,9 @@ from core.ollama_client import ollama_chat, safe_parse_json
 from core.utils import generate_id
 
 logger = logging.getLogger(__name__)
+
+# 预编译正则：摘要压缩时匹配关键叙事节点
+_KEY_RE = re.compile(r'转折|高潮|冲突|揭露|伏笔|关键|爆发|逆转|危机|秘密')
 
 
 class StageE(BaseStage):
@@ -123,8 +127,7 @@ class StageE(BaseStage):
       "action": "埋下(plant) / 推进(advance) / 回收(resolve) / 延后(defer)",
       "description": "伏笔内容简述或意象呼应方式",
       "payoff_timing": "本卷内已回收/未回收(二选一)",
-      "scope_type": "伏笔作用范围(book全书/volume本卷/chapter本章)",
-      "resolution_excerpt": "如果是回收类伏笔，摘录回收时的原文片段(100-200字)；否则留空"
+      "scope_type": "伏笔作用范围(book全书/volume本卷/chapter本章)"
     }}
   ],
   "state_changes": [
@@ -360,11 +363,11 @@ class StageE(BaseStage):
         for fs in results.get("plot_foreshadowing", []):
             fs_id = generate_id(fs["book_name"], fs["hook_name"], fs.get("planted_chapter", ""), fs.get("resolved_chapter", ""))
             cursor.execute(
-                "INSERT OR REPLACE INTO plot_foreshadowing VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO plot_foreshadowing VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (fs_id, fs["book_name"], fs["hook_name"], fs.get("planted_chapter", ""),
                  fs.get("planned_payoff", ""), fs.get("status", ""),
                  fs.get("payoff_timing", ""), fs.get("scope_type", ""),
-                 fs.get("resolved_chapter", ""), fs.get("resolution_excerpt", ""),
+                 fs.get("resolved_chapter", ""),
                  fs.get("last_advanced_chapter", "")),
             )
             stats["foreshadowing"] += 1

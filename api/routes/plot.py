@@ -167,7 +167,7 @@ def get_foreshadowing(
     rows = cursor.fetchall()
 
     columns = ["id", "book_name", "hook_name", "planted_chapter",
-               "planned_payoff", "status", "resolved_chapter", "resolution_excerpt"]
+               "planned_payoff", "status", "resolved_chapter"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -339,7 +339,7 @@ def get_emotion_transitions(
     )
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "transition_type", "foreshadowing_method", "original_example"]
+    columns = ["id", "book_name", "transition_type", "foreshadowing_method"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}

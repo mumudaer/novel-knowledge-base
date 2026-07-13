@@ -226,8 +226,7 @@ class StageF(BaseStage):
   "show_tell_patterns": [
     {{
       "pattern_type": "模式类型(Show为主/Tell为主/混合)",
-      "ratio_estimate": "Show vs Tell 比例估算(如:7:3/5:5，10字内)",
-      "switching_triggers": "切换时机(如:情感场景用Show/背景介绍用Tell，50字内)",
+            "switching_triggers": "切换时机(如:情感场景用Show/背景介绍用Tell，50字内)",
       "original_example": "原文示例(摘录体现该模式的关键段落，100-200字)"
       "writing_quality": 8
     }}
@@ -906,13 +905,12 @@ class StageF(BaseStage):
         for st in results.get("show_tell_patterns", []):
             st_id = generate_id(st["book_name"], st["chapter_id"], st["pattern_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO show_tell_patterns VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO show_tell_patterns VALUES (?,?,?,?,?,?,?)",
                 (
                     st_id,
                     st["book_name"],
                     st["chapter_id"],
                     st["pattern_type"],
-                    st.get("ratio_estimate", ""),
                     st.get("switching_triggers", ""),
                     st.get("original_example", ""),
                     st.get("writing_quality", 5),

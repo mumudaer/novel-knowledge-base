@@ -452,8 +452,7 @@ class StageH(BaseStage):
   "emotion_transition_patterns": [
     {{
       "transition_type": "情感转变类型",
-      "foreshadowing_method": "铺垫方式(50字内)",
-      "original_example": "原文示例(100-200字)"
+      "foreshadowing_method": "铺垫方式(50字内)"
     }}
   ],
   "information_management": [
@@ -664,8 +663,7 @@ class StageH(BaseStage):
       "technique_name": "技法名称",
       "technique_category": "技法分类",
       "analysis": "技法分析(100字内)",
-      "original_example": "原文示例(100-200字)",
-      "applicable_scenarios": "适用场景(50字内)"
+            "applicable_scenarios": "适用场景(50字内)"
     }}
   ],
   "pov_switching_patterns": [
@@ -938,13 +936,12 @@ class StageH(BaseStage):
         for et in results.get("emotion_transition_patterns", []):
             et_id = generate_id(et["book_name"], et["transition_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO emotion_transition_patterns VALUES (?,?,?,?,?)",
+                "INSERT OR REPLACE INTO emotion_transition_patterns VALUES (?,?,?,?)",
                 (
                     et_id,
                     et["book_name"],
                     et["transition_type"],
                     et.get("foreshadowing_method", ""),
-                    et.get("original_example", ""),
                 ),
             )
             stats["emotion_transition_patterns"] += 1
@@ -1041,7 +1038,7 @@ class StageH(BaseStage):
         for fb in results.get("fear_building", []):
             fb_id = generate_id(fb["book_name"], fb["fear_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO fear_building VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO fear_building VALUES (?,?,?,?,?,?)",
                 (
                     fb_id,
                     fb["book_name"],
@@ -1049,7 +1046,6 @@ class StageH(BaseStage):
                     json.dumps(fb.get("building_steps", []), ensure_ascii=False),
                     json.dumps(fb.get("atmosphere_techniques", []), ensure_ascii=False),
                     fb.get("climax_moment", ""),
-                    fb.get("original_example", ""),
                 ),
             )
             stats["fear_building"] += 1
@@ -1076,7 +1072,7 @@ class StageH(BaseStage):
         for gt in results.get("genre_specific_techniques", []):
             gt_id = generate_id(gt["book_name"], gt["technique_name"])
             cursor.execute(
-                "INSERT OR REPLACE INTO genre_specific_techniques VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO genre_specific_techniques VALUES (?,?,?,?,?,?)",
                 (
                     gt_id,
                     gt["book_name"],
@@ -1084,8 +1080,6 @@ class StageH(BaseStage):
                     gt["technique_name"],
                     gt.get("technique_category", ""),
                     gt.get("analysis", ""),
-                    gt.get("original_example", ""),
-                    gt.get("applicable_scenarios", ""),
                 ),
             )
             stats["genre_specific_techniques"] += 1
@@ -1094,7 +1088,7 @@ class StageH(BaseStage):
         for pp in results.get("pov_switching_patterns", []):
             pp_id = generate_id(pp["book_name"], pp["pattern_type"])
             cursor.execute(
-                "INSERT OR REPLACE INTO pov_switching_patterns VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO pov_switching_patterns VALUES (?,?,?,?,?,?)",
                 (
                     pp_id,
                     pp["book_name"],
@@ -1102,7 +1096,6 @@ class StageH(BaseStage):
                     json.dumps(pp.get("pov_characters", []), ensure_ascii=False),
                     pp.get("switching_triggers", ""),
                     pp.get("frequency", ""),
-                    pp.get("original_example", ""),
                 ),
             )
             stats["pov_switching_patterns"] += 1

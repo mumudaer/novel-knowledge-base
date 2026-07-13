@@ -143,7 +143,6 @@ class ForeshadowingItem(BaseModel):
     planned_payoff: str
     status: str
     resolved_chapter: str
-    resolution_excerpt: str = ""
 
 
 class ChapterFunctionItem(BaseModel):
@@ -171,7 +170,6 @@ class AuthorFingerprintItem(BaseModel):
     adjectives: str
     imagery: str
     transitions: str
-    negative_prompts: str
     narrative_perspective: str
     sentence_rhythm: str
 

@@ -233,7 +233,7 @@ def search_style(
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         cols = ["id", "book_name", "chapter_id", "distance_type",
-                "trigger_reason", "original_example"]
+                "trigger_reason"]
         result_sections["narrative_distance"] = [dict(zip(cols, r)) for r in rows]
 
     # Show vs Tell 策略（纯 SQL，无向量集合）
@@ -247,7 +247,7 @@ def search_style(
         cursor.execute(sql, params)
         rows = cursor.fetchall()
         cols = ["id", "book_name", "chapter_id", "pattern_type",
-                "ratio_estimate", "switching_triggers", "original_example"]
+                "switching_triggers"]
         result_sections["show_tell_patterns"] = [dict(zip(cols, r)) for r in rows]
 
     # 风格总结（纯 SQL）
@@ -273,7 +273,7 @@ def search_style(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
     cols = ["id", "book_name", "genre_tag", "technique_name", "technique_category",
-            "analysis", "original_example", "applicable_scenarios"]
+            "analysis"]
     result_sections["genre_specific_techniques"] = [dict(zip(cols, r)) for r in rows]
 
     # 恐惧/氛围构建链（纯 SQL）
@@ -286,7 +286,7 @@ def search_style(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
     cols = ["id", "book_name", "fear_type", "building_steps_json",
-            "atmosphere_techniques_json", "climax_moment", "original_example"]
+            "atmosphere_techniques_json", "climax_moment"]
     fear = []
     for row in rows:
         item = dict(zip(cols, row))
@@ -1268,7 +1268,7 @@ def search_genre_technique(
     rows = cursor.fetchall()
 
     cols = ["id", "book_name", "genre_tag", "technique_name", "technique_category",
-            "analysis", "original_example", "applicable_scenarios"]
+            "analysis"]
     results = [dict(zip(cols, r)) for r in rows]
 
     _log_search("default", "genre_technique", query or genre_tag or "", len(results))

@@ -86,14 +86,14 @@ class StageD(BaseStage):
       "entity": "具体实体名",
       "content": "详细规则、空间分布、核心限制/代价/底层冲突(100-300字)",
       "tags": ["标签1", "标签2"],
-      "daily_life": "日常生活体系(50字内)",
-      "taboos": "禁忌与边界(50字内)",
-      "conflict_roots": "冲突根源图谱(50字内)",
-      "geography": "地理空间拓扑(50字内)",
-      "economy": "经济与资源体系(50字内)",
-      "culture": "语言与文化符号(50字内)",
-      "causal_chain": "设定间的因果链(50字内)",
-      "rules_exceptions": "规则例外与代价(50字内)"
+      "daily_life": "日常生活体系(50字内，无则留空)",
+      "taboos": "禁忌与边界(50字内，无则留空)",
+      "conflict_roots": "冲突根源图谱(50字内，无则留空)",
+      "geography": "地理空间拓扑(50字内，无则留空)",
+      "economy": "经济与资源体系(50字内，无则留空)",
+      "culture": "语言与文化符号(50字内，无则留空)",
+      "causal_chain": "设定间的因果链(50字内，无则留空)",
+      "rules_exceptions": "规则例外与代价(50字内，无则留空)"
     }}
   ],
   "golden_finger": {{
@@ -124,7 +124,7 @@ class StageD(BaseStage):
     }}
   ]
 }}
-(⚠️核心要求：必须根据小说实际题材自适应提取！必须提取规则例外与代价！必须提取势力关系网络！禁止反引号)"""
+(⚠️核心要求：必须根据小说实际题材自适应提取！所有子字段本章无相应信息必须留空，禁止编造！禁止反引号)"""
 
         try:
             resp = ollama_chat(prompt, 0.1, "D")
@@ -226,14 +226,14 @@ class StageD(BaseStage):
       "quirks": "标志性口癖/微表情/下意识动作",
       "identity": "身份/职业/阵营/社会阶层",
       "motivation": "核心动机/终极目标/核心欲望",
-      "internal_conflict": "内心冲突/人物弧光",
+      "internal_conflict": "内心冲突/人物弧光(本章可观测部分，无则留空)",
       "personality": "性格底色/优缺点/行事底线",
       "relation_to_mc": "与主角/核心视角的初始关系",
       "abilities": "能力体系(技能/天赋/战斗风格，50字内)",
       "speech_samples": "语言风格样本(口头禅、用词习惯的原文摘录，100字内)",
       "behavior_samples": "行为标志样本(习惯性动作的原文描写，100字内)",
       "climax_or_fate": "已观测高光时刻(如关键战斗/情感爆发/名场面等，无则留空)",
-      "background": "前史/背景故事/原生家庭影响"
+      "background": "前史/背景故事(本章提及的部分，无则留空)"
     }}
   ]
 }}
@@ -250,6 +250,7 @@ class StageD(BaseStage):
                                 "book_name": self.book_name,
                                 "author": self.author,
                                 "category": self.category,
+                                "chapter_id": chap_id,
                                 "name": cp.get("name"),
                                 "role_type": cp.get("role_type", "未知"),
                                 "appearance": cp.get("appearance", ""),
@@ -320,11 +321,12 @@ class StageD(BaseStage):
         """基于聚合核心档案提取扩展19字段，回填到所有该人物的记录中"""
         if not core_text.strip():
             return
+        raw_section = f"【关键原文片段】\n{raw_snippets[:3000]}" if raw_snippets else ""
         prompt = f"""你是顶级的人物塑造大师。请根据以下《{self.book_name}》({self.category})中人物【{name}】的全书核心档案，深度分析扩展维度。
 
 【核心档案】
 {core_text[:5000]}
-{"【关键原文片段】\n" + raw_snippets[:3000] if raw_snippets else ""}
+{raw_section}
 
 请输出纯 JSON 格式：
 {{

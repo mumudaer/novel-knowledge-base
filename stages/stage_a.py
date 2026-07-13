@@ -152,7 +152,7 @@ class StageA(BaseStage):
   }},
   "information_flow": {{
     "new_info": ["本章新揭示的信息(谁知道什么新东西，30字内)"],
-    "hidden_info": ["读者知道但角色不知道的信息(30字内)"]
+    "hidden_info": ["本章可辨识的戏剧性讽刺(如旁白明示角色不知道的事，30字内，无则留空)"]
   }},
   "emotion_arc": "本章主要情绪走向(如:平静→紧张→爆发→余韵，20字内)",
   "time_progression": "本章时间推进(如:过了三天/同一天晚上/时间未明确，20字内)",{category_prompt}
@@ -331,5 +331,6 @@ class StageA(BaseStage):
                         existing_list.append(action_val)
                         graph[char_node][chap_edge]["action"] = "|".join(existing_list)
 
-        logger.info(f"   \u2705 [阶段A战报] plot_arcs 新增: {stats['plot_arcs']} 条 | 图谱人物节点: {stats['graph_nodes']} 个")
+        self.graph.save()
+        logger.info(f"   ✅ [阶段A战报] plot_arcs 新增: {stats['plot_arcs']} 条 | 图谱人物节点: {stats['graph_nodes']} 个")
         return stats

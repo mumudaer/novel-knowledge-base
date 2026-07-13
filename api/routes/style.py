@@ -19,7 +19,7 @@ def get_style_fingerprint(
 ):
     """查询文风指纹 - 支持混合检索"""
     columns = ["id", "book_name", "category", "verbs", "adjectives",
-               "imagery", "transitions", "negative_prompts",
+               "imagery", "transitions",
                "narrative_perspective", "sentence_rhythm"]
     
     filters = {}
@@ -278,7 +278,7 @@ def get_narrative_distance(
     rows = cursor.fetchall()
 
     columns = ["id", "book_name", "chapter_id", "distance_type",
-               "trigger_reason", "original_example"]
+               "trigger_reason"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -309,7 +309,7 @@ def get_show_tell_patterns(
     rows = cursor.fetchall()
 
     columns = ["id", "book_name", "chapter_id", "pattern_type",
-               "ratio_estimate", "switching_triggers", "original_example"]
+               "switching_triggers"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}

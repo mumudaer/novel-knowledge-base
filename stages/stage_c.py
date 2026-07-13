@@ -32,13 +32,12 @@ def process_single_chapter_c(
 【正文】{text}
 输出JSON：{{
   "author_fingerprint": {{
-    "preferred_verbs": ["作者偏爱的特色动词，限5个，必须是纯字符串"],
-    "preferred_adjectives": ["偏爱的特色形容词，限5个，必须是纯字符串"],
-    "environmental_imagery": ["环境描写常用意象，限5个，必须是纯字符串"],
-    "signature_transitions": ["标志性的过渡句或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"],
+    "preferred_verbs": ["本章特色动词(非作者全部偏好)，限5个，必须是纯字符串"],
+    "preferred_adjectives": ["本章特色形容词(非作者全部偏好)，限5个，必须是纯字符串"],
+    "environmental_imagery": ["本章环境描写意象(非全书统计)，限5个，必须是纯字符串"],
+    "signature_transitions": ["本章观察到的过渡手法(非全书标志性)或修辞手法，限2个，必须是纯字符串，绝对禁止使用对象或字典嵌套！"],
     "narrative_perspective": "叙事视角(如:第一人称限制视角/全知上帝视角/多视角切换/意识流，限20字)",
-    "sentence_rhythm": "句式节奏偏好(如:偏爱绵密的长句与从句/冷峻短促的白描/大量使用破折号与省略号，限30字)",
-    "negative_prompts": "【重要】总结该作者绝对不会用的词汇、句式，或AI常犯的说教味毛病(如:禁用'然而/不仅如此/眼中闪过一丝'，禁止在章末进行道德总结，限50字)"
+    "sentence_rhythm": "句式节奏偏好(如:偏爱绵密的长句与从句/冷峻短促的白描/大量使用破折号与省略号，限30字)"
   }},
   "sensory_mappings": [
     {{
@@ -167,7 +166,7 @@ class StageC(BaseStage):
             fp_id = generate_id(res["book_name"], res["chapter_id"], "fingerprint")
 
             cursor.execute(
-                "INSERT OR REPLACE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO author_fingerprints VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     fp_id,
                     res["book_name"],
