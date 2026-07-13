@@ -175,7 +175,6 @@ class StageC(BaseStage):
                     clean_list(fp, "preferred_adjectives"),
                     clean_list(fp, "environmental_imagery"),
                     clean_list(fp, "signature_transitions"),
-                    fp.get("negative_prompts", ""),
                     fp.get("narrative_perspective", ""),
                     fp.get("sentence_rhythm", ""),
                 ),
