@@ -640,7 +640,6 @@ class StageH(BaseStage):
       "payoff_chapter": "回收章节",
       "red_herring": 0,
       "misdirection_method": "误导手法(50字内)",
-      "reasoning_chain": ["推理步骤1"],
       "twist_design": "反转设计(50字内)"
     }}
   ],
@@ -727,7 +726,6 @@ class StageH(BaseStage):
                                     "misdirection_method": mc.get(
                                         "misdirection_method", ""
                                     ),
-                                    "reasoning_chain": mc.get("reasoning_chain", []),
                                     "twist_design": mc.get("twist_design", ""),
                                 }
                             )
@@ -865,6 +863,34 @@ class StageH(BaseStage):
                 ),
             )
             stats["plot_lines"] += 1
+
+        # ChromaDB 写入：book_structure + plot_lines
+        bs_items = []
+        for bs in results.get("book_structure", []):
+            bs_items.append({
+                "book_name": bs["book_name"],
+                "surface_theme": bs.get("surface_theme", ""),
+                "deep_theme": bs.get("deep_theme", ""),
+                "_chroma_text": f"{bs.get('surface_theme','')} {bs.get('deep_theme','')}",
+            })
+        if bs_items:
+            from core.chroma_utils import bulk_upsert_to_chroma
+            bulk_upsert_to_chroma("book_structure_kb", bs_items,
+                id_fields=["book_name"], text_field="_chroma_text",
+                metadata_fields=["book_name", "surface_theme", "deep_theme"])
+
+        pl_items = []
+        for pl in results.get("plot_lines", []):
+            pl_items.append({
+                "book_name": pl["book_name"],
+                "line_type": pl["line_type"],
+                "theme": pl.get("theme", ""),
+                "_chroma_text": f"{pl['line_type']}: {pl.get('theme','')}",
+            })
+        if pl_items:
+            bulk_upsert_to_chroma("plot_lines_kb", pl_items,
+                id_fields=["book_name", "line_type"], text_field="_chroma_text",
+                metadata_fields=["book_name", "line_type", "theme"])
 
         # 情感曲线入库
         for ea in results.get("emotional_arc", []):
@@ -1024,7 +1050,7 @@ class StageH(BaseStage):
         for mc in results.get("mystery_clues", []):
             mc_id = generate_id(mc["book_name"], mc["clue_name"])
             cursor.execute(
-                "INSERT OR REPLACE INTO mystery_clues VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO mystery_clues VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     mc_id,
                     mc["book_name"],
@@ -1034,7 +1060,6 @@ class StageH(BaseStage):
                     mc.get("payoff_chapter", ""),
                     mc.get("red_herring", 0),
                     mc.get("misdirection_method", ""),
-                    json.dumps(mc.get("reasoning_chain", []), ensure_ascii=False),
                     mc.get("twist_design", ""),
                 ),
             )

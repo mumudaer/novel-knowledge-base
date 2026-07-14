@@ -465,14 +465,10 @@ def search_plot(
     rows = cursor.fetchall()
     cols = ["id", "book_name", "clue_name", "clue_type", "planted_chapter",
             "payoff_chapter", "red_herring", "misdirection_method",
-            "reasoning_chain_json", "twist_design"]
+            "twist_design"]
     mystery = []
     for row in rows:
         item = dict(zip(cols, row))
-        try:
-            item["reasoning_chain"] = json.loads(item.pop("reasoning_chain_json", "[]"))
-        except Exception:
-            item["reasoning_chain"] = []
         mystery.append(item)
     result_sections["mystery_clues"] = mystery
 
@@ -1172,14 +1168,10 @@ def search_mystery(
 
     cols = ["id", "book_name", "clue_name", "clue_type", "planted_chapter",
             "payoff_chapter", "red_herring", "misdirection_method",
-            "reasoning_chain_json", "twist_design"]
+            "twist_design"]
     results = []
     for row in rows:
         item = dict(zip(cols, row))
-        try:
-            item["reasoning_chain"] = json.loads(item.pop("reasoning_chain_json", "[]"))
-        except Exception:
-            item["reasoning_chain"] = []
         results.append(item)
 
     _log_search("default", "mystery", query or clue_type or "", len(results))

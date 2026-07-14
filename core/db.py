@@ -84,7 +84,7 @@ class DatabaseManager:
         "romance_lines": "(id TEXT PRIMARY KEY, book_name TEXT, couple_a TEXT, couple_b TEXT, line_type TEXT, development_stages_json TEXT, sweet_points_json TEXT, angst_points_json TEXT, interaction_patterns_json TEXT, resolution TEXT)",
         
         # 线索与推理链（悬疑/推理）
-        "mystery_clues": "(id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, reasoning_chain_json TEXT, twist_design TEXT)",
+        "mystery_clues": "(id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, twist_design TEXT)",
         
         # 恐惧/氛围构建链（克苏鲁/恐怖/悬疑）
         "fear_building": "(id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT)",

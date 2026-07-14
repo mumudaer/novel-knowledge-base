@@ -100,7 +100,8 @@ class StageE(BaseStage):
                     tail_n = max(3, len(lines) // 4)
                     kept = lines[:head_n]
                     # 中间部分：优先保留含转折/高潮/冲突关键词的摘要行
-                    _key_re = re.compile(r'转折|高潮|冲突|揭露|伏笔|关键|爆发|逆转|危机|秘密')
+                    # _key_re replaced by module-level _KEY_RE
+                    _key_re = _KEY_RE  # '转折|高潮|冲突|揭露|伏笔|关键|爆发|逆转|危机|秘密')
                     # 稀疏采样（每10行取1行）+ 关键词匹配行全部保留
                     for i in range(head_n, len(lines) - tail_n):
                         if i % 10 == 0 or _key_re.search(lines[i]):
@@ -275,9 +276,9 @@ class StageE(BaseStage):
       "cool_point_type": "爽点类型(打脸/智斗/情感/真相/关系/升级/无爽点)",
       "arc_length": "所属弧线类型(短弧2-3章/中弧5-8章/长弧全书/无弧线)",
       "information_gap": {{
-        "reader_knows": ["读者知道但角色不知道的信息"],
-        "character_knows": ["角色知道但读者不知道的信息"],
-        "dramatic_effect": "产生的戏剧效果(如:戏剧性讽刺/悬念/期待)"
+        "reader_knows": ["本章片段中读者知道但角色不知道的信息(无则留空)"],
+        "character_knows": ["本章片段中角色知道但读者不知道的信息(无则留空)"],
+        "dramatic_effect": "产生的戏剧效果(无则留空)"
       }},
       "active_plotlines": ["本章推进的剧情线(如:主线-复仇/支线-感情线/支线-势力线/支线-成长线)"]
     }}

@@ -128,8 +128,8 @@ class StageF(BaseStage):
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
 2. 每个摘录必须附带 writing_quality（写作质量1-10）
-   writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
-   ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
+   writing_quality标准：仅用于同书内相对排序。7分=本章中优秀，5分=普通，3分=流水账。不同书的分数不可比较
+   ⚠️ writing_quality必须如实评估，禁止全部给8-10分。评分仅供同书内排序，不跨书比较！
 3. 每章最多提取 2-3 个最典型的对话样本、2-3 个描写样本、1-2 个转场样本
 4. 优先选择包含完整情境、情绪转变、技法突出的段落
 5. 转场样本要特别关注章节之间、场景之间的过渡手法
@@ -263,8 +263,8 @@ class StageF(BaseStage):
 (⚠️核心要求：
 1. **所有原文摘录必须原封不动复制，禁止任何改写、缩写、扩写！** 这是最重要的要求！
 2. 每个摘录必须附带 writing_quality（写作质量1-10）
-   writing_quality标准：7分=优秀可参考，5分=普通过渡，3分=流水账，10分极罕见
-   ⚠️ writing_quality必须如实评估，禁止全部给8-10分！
+   writing_quality标准：仅用于同书内相对排序。7分=本章中优秀，5分=普通，3分=流水账。不同书的分数不可比较
+   ⚠️ writing_quality必须如实评估，禁止全部给8-10分。评分仅供同书内排序，不跨书比较！
 3. 必须分析叙事距离的变化（何时贴近内心、何时拉远鸟瞰）！
 4. 必须分析 Show vs Tell 的比例和切换时机！
 5. 如果本章有动作/战斗/追逐/竞技场景，必须提取高质量的动作场景范文！没有则返回空数组！
@@ -356,6 +356,12 @@ class StageF(BaseStage):
                                 "quote_type": quote.get("quote_type", ""),
                             }
                         )
+                        # 验证：金句必须在原文中存在
+                        quote_text_val = quote.get("quote_text", "")
+                        if quote_text_val and quote_text_val not in text:
+                            logger.warning(
+                                f"⚠️ [阶段F] 章节{chap_id}金句未在原文中找到，可能编造: {quote_text_val[:30]}..."
+                            )
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-进阶样本] 解析章节 {chap_id} 失败: {e}")
             if stage_result:
@@ -487,6 +493,8 @@ class StageF(BaseStage):
         else:
             # 并行处理未完成章节
             workers = min(STAGE_F_WORKERS, len(pending))
+            if os.environ.get("STAGE_F_INTERNAL_SINGLE"):
+                workers = 1
             logger.info(
                 f"[阶段F] 使用 {workers} 个并发 worker 处理剩余 {len(pending)} 章"
             )

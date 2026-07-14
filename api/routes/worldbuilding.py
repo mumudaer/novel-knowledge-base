@@ -47,13 +47,15 @@ def get_world_settings(
 @router.get("/timeline")
 def get_world_timeline(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500, description="返回数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
 ):
     """查询编年史"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM world_timeline WHERE book_name = ? ORDER BY era_or_year",
-        (book_name,),
+        "SELECT * FROM world_timeline WHERE book_name = ? ORDER BY era_or_year LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -112,13 +114,15 @@ def search_world_settings(
 @router.get("/factions")
 def get_faction_networks(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     """查询势力关系网络"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM faction_networks WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM faction_networks WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -133,12 +137,14 @@ def get_faction_networks(
 def get_setting_evolutions(
     book_name: str = Query(..., description="书名"),
     setting_module: Optional[str] = Query(None, description="设定模块"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     """查询设定演变追踪"""
     db = get_db_manager()
     cursor = db.connect().cursor()
 
-    query = "SELECT * FROM setting_evolutions WHERE book_name = ?"
+    query = "SELECT * FROM setting_evolutions WHERE book_name = ? LIMIT ? OFFSET ?"
     params = [book_name]
 
     if setting_module:

@@ -72,13 +72,15 @@ def get_main_plot(
 @router.get("/subplots")
 def get_subplots(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500, description="返回数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
 ):
     """查询支线剧情"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM plot_lines WHERE book_name = ? AND line_type = 'subplot'",
-        (book_name,),
+        "SELECT * FROM plot_lines WHERE book_name = ? LIMIT ? OFFSET ? AND line_type = 'subplot' LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -98,13 +100,15 @@ def get_subplots(
 @router.get("/emotional-arc")
 def get_emotional_arc(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500, description="返回数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
 ):
     """查询情感曲线"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM emotional_arc WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM emotional_arc WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -124,13 +128,15 @@ def get_emotional_arc(
 @router.get("/cool-points")
 def get_climax_points(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     """查询高潮点分布"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM climax_point_distribution WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM climax_point_distribution WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -151,12 +157,14 @@ def get_climax_points(
 def get_foreshadowing(
     book_name: str = Query(..., description="书名"),
     status: Optional[str] = Query(None, description="状态(未填/已填)"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询伏笔追踪"""
     db = get_db_manager()
     cursor = db.connect().cursor()
 
-    query = "SELECT * FROM plot_foreshadowing WHERE book_name = ?"
+    query = "SELECT * FROM plot_foreshadowing WHERE book_name = ? LIMIT ? OFFSET ?"
     params = [book_name]
 
     if status:
@@ -176,13 +184,15 @@ def get_foreshadowing(
 @router.get("/symbols")
 def get_symbols(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询象征体系"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM symbol_system WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM symbol_system WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -209,7 +219,7 @@ def get_chapter_functions(
     db = get_db_manager()
     cursor = db.connect().cursor()
 
-    query = "SELECT * FROM chapter_functions WHERE book_name = ?"
+    query = "SELECT * FROM chapter_functions WHERE book_name = ? LIMIT ? OFFSET ?"
     params = [book_name]
 
     if function_type:
@@ -247,13 +257,15 @@ def get_chapter_functions(
 @router.get("/volume-outlines")
 def get_volume_outlines(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询卷大纲"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM macro_outlines WHERE book_name = ? ORDER BY volume_index",
-        (book_name,),
+        "SELECT * FROM macro_outlines WHERE book_name = ? LIMIT ? OFFSET ? ORDER BY volume_index",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -275,13 +287,15 @@ def get_volume_outlines(
 @router.get("/revelation-pacing")
 def get_revelation_pacing(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询信息揭露节奏"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM revelation_pacing WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM revelation_pacing WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -295,13 +309,15 @@ def get_revelation_pacing(
 @router.get("/chapter-patterns")
 def get_chapter_patterns(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询章节模式总结"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM chapter_patterns WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM chapter_patterns WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -329,13 +345,15 @@ def get_chapter_patterns(
 @router.get("/emotion-transitions")
 def get_emotion_transitions(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询情感转变铺垫模式"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM emotion_transition_patterns WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM emotion_transition_patterns WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -348,13 +366,15 @@ def get_emotion_transitions(
 @router.get("/information-management")
 def get_information_management(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询全书信息管理策略"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM information_management WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM information_management WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -368,13 +388,15 @@ def get_information_management(
 @router.get("/climax-buildup")
 def get_climax_buildup(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询高潮构建链"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM climax_buildup_chains WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM climax_buildup_chains WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 
@@ -395,13 +417,15 @@ def get_climax_buildup(
 @router.get("/conflict-escalation")
 def get_conflict_escalation(
     book_name: str = Query(..., description="书名"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0)
 ):
     """查询冲突升级阶梯"""
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM conflict_escalation WHERE book_name = ?",
-        (book_name,),
+        "SELECT * FROM conflict_escalation WHERE book_name = ? LIMIT ? OFFSET ?",
+        (book_name, limit, offset),
     )
     rows = cursor.fetchall()
 

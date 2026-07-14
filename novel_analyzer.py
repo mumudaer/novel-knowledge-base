@@ -502,6 +502,8 @@ def run_layer_3(book_name: str, category: str, stage_a_res: List[Dict], manifest
     h_obj_final = tasks.get("H")
 
     if group2:
+        # F内部并发降为1(与G/O并行时避免超OLLAMA_NUM_PARALLEL=2)
+        os.environ["STAGE_F_INTERNAL_SINGLE"] = "1"
         with ThreadPoolExecutor(max_workers=len(group2)) as executor:
             futures = {}
             for key, stage_obj in group2.items():
