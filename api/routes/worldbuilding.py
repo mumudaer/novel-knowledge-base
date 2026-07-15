@@ -144,12 +144,15 @@ def get_setting_evolutions(
     db = get_db_manager()
     cursor = db.connect().cursor()
 
-    query = "SELECT * FROM setting_evolutions WHERE book_name = ? LIMIT ? OFFSET ?"
+    query = "SELECT * FROM setting_evolutions WHERE book_name = ?"
     params = [book_name]
 
     if setting_module:
         query += " AND setting_module LIKE ?"
         params.append(f"%{setting_module}%")
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
 
     cursor.execute(query, params)
     rows = cursor.fetchall()

@@ -118,6 +118,8 @@ class StageH(BaseStage):
         # 断点恢复
         cache = self.load_cache()
         groups_done = set(cache.get("groups_done", [])) if cache else set()
+        if cache and "result" in cache:
+            result.update({k: v for k, v in cache["result"].items() if v})
 
         # 第一组：结构组
         if "structure" not in groups_done:
@@ -132,43 +134,42 @@ class StageH(BaseStage):
             self.save_cache({"groups_done": list(groups_done), "result": result})
         else:
             logger.info("✅ [阶段H] 结构组已完成，跳过")
+            # 从缓存恢复 structure_data，供后续构建 structure_context 使用
+            cached_result = cache.get("result", {})
+            structure_data = {
+                k: cached_result.get(k, [])
+                for k in [
+                    "book_structure", "plot_lines", "emotional_arc",
+                    "climax_point_distribution", "symbol_system",
+                ]
+            }
 
         # 构建结构组摘要，供后续组参考
         structure_context = self._build_group_context(structure_data)
 
-        # 第二组：技法组（传入结构组上下文）
-        technique_data = self._extract_technique_group(
-            summaries_text, volumes_text, structure_context
-        )
-        for key in [
-            "revelation_pacing",
-            "chapter_patterns",
-            "emotion_transition_patterns",
-            "information_management",
-            "climax_buildup_chains",
-            "conflict_escalation",
-        ]:
-            if key in technique_data:
-                result[key] = technique_data[key]
-
-        # 构建技法组摘要，供类型组参考
-        technique_context = self._build_group_context(technique_data)
+        # 第二组：技法组
+        tk = ["revelation_pacing", "chapter_patterns", "emotion_transition_patterns", "information_management", "climax_buildup_chains", "conflict_escalation"]
+        if "technique" not in groups_done:
+            technique_data = self._extract_technique_group(summaries_text, volumes_text, structure_context)
+            for key in tk:
+                if key in technique_data: result[key] = technique_data[key]
+            groups_done.add("technique")
+            self.save_cache({"groups_done": list(groups_done), "result": result})
+        else:
+            logger.info("✅ [阶段H] 技法组已完成，跳过")
+        technique_context = self._build_group_context({k: result.get(k, []) for k in tk})
         combined_context = structure_context + "\n" + technique_context
 
-        # 第三组：类型组（传入结构组+技法组上下文）
-        genre_data = self._extract_genre_group(
-            summaries_text, volumes_text, combined_context
-        )
-        for key in [
-            "romance_lines",
-            "mystery_clues",
-            "fear_building",
-            "progression_systems",
-            "genre_specific_techniques",
-            "pov_switching_patterns",
-        ]:
-            if key in genre_data:
-                result[key] = genre_data[key]
+        # 第三组：类型组
+        gk = ["romance_lines", "mystery_clues", "fear_building", "progression_systems", "genre_specific_techniques", "pov_switching_patterns"]
+        if "genre" not in groups_done:
+            genre_data = self._extract_genre_group(summaries_text, volumes_text, combined_context)
+            for key in gk:
+                if key in genre_data: result[key] = genre_data[key]
+            groups_done.add("genre")
+            self.save_cache({"groups_done": list(groups_done), "result": result})
+        else:
+            logger.info("✅ [阶段H] 类型组已完成，跳过")
 
         logger.info(
             f"✅ [阶段H战报] 结构: {len(result['book_structure'])} | "

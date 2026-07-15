@@ -264,7 +264,7 @@ def get_volume_outlines(
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT * FROM macro_outlines WHERE book_name = ? LIMIT ? OFFSET ? ORDER BY volume_index",
+        "SELECT * FROM macro_outlines WHERE book_name = ? ORDER BY volume_index LIMIT ? OFFSET ?",
         (book_name, limit, offset),
     )
     rows = cursor.fetchall()

@@ -195,10 +195,12 @@ class StageO(BaseStage):
             key=lambda e: self._chapter_sort_key(e.get("chapter_id", "")),
         )
 
-        # 分批进行因果分析
+        # 分批进行因果分析（使用滑动窗口，每批与前一批重叠10个事件以捕捉跨批因果）
+        overlap = 10
+        step = self.CAUSAL_ANALYSIS_BATCH - overlap
         batches = [
             sorted_events[i : i + self.CAUSAL_ANALYSIS_BATCH]
-            for i in range(0, len(sorted_events), self.CAUSAL_ANALYSIS_BATCH)
+            for i in range(0, max(len(sorted_events), 1), step)
         ]
 
         for batch in tqdm(batches, desc="[阶段O] 因果分析"):
@@ -215,8 +217,10 @@ class StageO(BaseStage):
                     f"角色:{','.join(event.get('characters_involved', []))})\n"
                 )
 
-            if len(events_text) > 6000:
-                events_text = events_text[:6000] + "\n...(截断)"
+            # 动态截断：滑动窗口批次可达60事件，按事件数调整字符预算
+            max_causal_chars = min(8000, len(batch) * 200 + 1000)
+            if len(events_text) > max_causal_chars:
+                events_text = events_text[:max_causal_chars] + "\n...(截断)"
 
             prompt = f"""你是专业的叙事因果分析师。分析以下事件之间的因果关系。
 
