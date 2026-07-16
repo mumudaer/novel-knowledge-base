@@ -560,8 +560,6 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
                 ]
             )
 
-        # 从 climax_point_distribution 表取数据
-
         author_desc = " | ".join(
             [s for s in style_info if s and "：" in s and s.split("：", 1)[1]]
         )

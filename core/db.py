@@ -132,15 +132,6 @@ class DatabaseManager:
         
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",
-        # symbol_system": " (id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)
-        # romance_lines": " (id TEXT PRIMARY KEY, book_name TEXT, couple_a TEXT, couple_b TEXT, line_type TEXT, development_stages_json TEXT, sweet_points_json TEXT, angst_points_json TEXT, interaction_patterns_json TEXT, resolution TEXT)
-        # progression_systems": " (id TEXT PRIMARY KEY, book_name TEXT, system_type TEXT, levels_json TEXT, upgrade_conditions_json TEXT, power_comparison_json TEXT, milestones_json TEXT, growth_pattern TEXT)
-        # pov_switching_patterns": " (id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT)
-        # mystery_clues": " (id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, twist_design TEXT)
-        # genre_specific_techniques": " (id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT)
-        # fear_building": " (id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT)
-        # emotional_arc": " (id TEXT PRIMARY KEY, book_name TEXT, arc_data_json TEXT)
-        # climax_point_distribution": " (id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT)
         # book_structure": " (id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)
     }
 
