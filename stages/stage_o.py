@@ -21,6 +21,7 @@ class StageO(BaseStage):
     EVENT_EXTRACTION_BATCH = 10
     # 因果分析批次大小（每批分析的事件数）
     CAUSAL_ANALYSIS_BATCH = 50
+    CAUSAL_OVERLAP = 25  # 50%重叠，确保跨批因果不丢失
 
     def __init__(self, book_name: str, category: str):
         super().__init__("O", book_name, category)
@@ -196,7 +197,7 @@ class StageO(BaseStage):
         )
 
         # 分批进行因果分析（使用滑动窗口，每批与前一批重叠10个事件以捕捉跨批因果）
-        overlap = 10
+        overlap = self.CAUSAL_OVERLAP
         step = self.CAUSAL_ANALYSIS_BATCH - overlap
         batches = [
             sorted_events[i : i + self.CAUSAL_ANALYSIS_BATCH]
@@ -304,6 +305,47 @@ class StageO(BaseStage):
 
             except Exception as e:
                 logger.warning(f"[阶段O] 因果分析批次失败: {e}")
+
+        # 全局二次归并：高重要性事件跨批因果分析
+        high_sig = [e for e in sorted_events if e.get("significance") in ("high", "critical")]
+        if len(high_sig) >= 3:
+            logger.info(f"[阶段O] 全局因果归并: {len(high_sig)} 个高重要性事件")
+            hi_text = ""
+            for i, event in enumerate(high_sig):
+                hi_text += (
+                    f"#{i+1} [{event.get('chapter_id', '')}] "
+                    f"{event.get('event_name', '')}: {event.get('event_summary', '')}\n"
+                )
+            hi_text = hi_text[:8000]
+            hi_prompt = f"""你是专业的叙事因果分析师。分析以下高重要性事件之间的全局因果关系。
+
+书名：{self.book_name}
+{hi_text}
+
+请输出纯 JSON 格式：
+{{"causal_edges": [
+  {{ "source_index": 1, "target_index": 3, "relation_type": "直接导致", "relation_detail": "A直接引发B" }}}}
+]}}}}
+(只分析确实存在的因果关系，不要强行建立。source_index/target_index 是上表中 # 后的编号)"""
+            try:
+                resp = ollama_chat(hi_prompt, 0.2, "O")
+                data = safe_parse_json(resp)
+                if data:
+                    idx_map = {i+1: e for i, e in enumerate(high_sig)}
+                    for edge in data.get("causal_edges", []):
+                        si, ti = int(edge.get("source_index", 0)), int(edge.get("target_index", 0))
+                        if si in idx_map and ti in idx_map:
+                            edge_id = generate_id(self.book_name, idx_map[si]["id"], idx_map[ti]["id"])
+                            if not any(e["id"] == edge_id for e in all_edges):
+                                all_edges.append({
+                                    "id": edge_id, "book_name": self.book_name,
+                                    "source_event_id": idx_map[si]["id"],
+                                    "target_event_id": idx_map[ti]["id"],
+                                    "relation_type": edge.get("relation_type", ""),
+                                    "relation_detail": edge.get("relation_detail", ""),
+                                })
+            except Exception as e:
+                logger.warning(f"[阶段O] 全局因果归并失败: {e}")
 
         return all_edges
 

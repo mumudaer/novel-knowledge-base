@@ -548,7 +548,7 @@ class StageD(BaseStage):
         for ws in results.get("world_settings", []):
             ws_id = generate_id(ws["book_name"], ws["module"], ws["entity"])
             cursor.execute(
-                "INSERT OR REPLACE INTO world_settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO world_settings VALUES (?,?,?,?,?,?,?,?)",
                 (
                     ws_id,
                     ws["book_name"],
@@ -558,14 +558,6 @@ class StageD(BaseStage):
                     ws["entity"],
                     ws["content"],
                     "|".join(ws.get("tags", [])),
-                    ws.get("daily_life", ""),
-                    ws.get("taboos", ""),
-                    ws.get("conflict_roots", ""),
-                    ws.get("geography", ""),
-                    ws.get("economy", ""),
-                    ws.get("culture", ""),
-                    ws.get("causal_chain", ""),
-                    ws.get("rules_exceptions", ""),
                 ),
             )
             stats["world_settings"] += 1
@@ -622,7 +614,7 @@ class StageD(BaseStage):
         for cp in results.get("character_profiles", []):
             cp_id = generate_id(cp["book_name"], cp["name"], "profile")
             cursor.execute(
-                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     cp_id,
                     cp["book_name"],
@@ -635,25 +627,16 @@ class StageD(BaseStage):
                     cp.get("identity", ""),
                     cp.get("motivation", ""),
                     cp.get("internal_conflict", ""),
-                    cp.get("fatal_flaw", ""),
                     cp.get("personality", ""),
                     cp.get("relation_to_mc", "未知"),
                     cp.get("relations_to_others", ""),
                     cp.get("climax_or_fate", ""),
                     cp.get("background", ""),
-                    cp.get("desire_vs_need", ""),
-                    cp.get("secrets", ""),
-                    cp.get("fears", ""),
-                    cp.get("social_masks", ""),
-                    cp.get("growth_cost", ""),
                     cp.get("speech_samples", ""),
                     cp.get("behavior_samples", ""),
                     cp.get("relationship_evolution", ""),
                     cp.get("abilities", ""),
-                    cp.get("arc_trajectory", ""),
                     cp.get("internal_dilemma", ""),
-                    cp.get("decision_pattern", ""),
-                    cp.get("cognitive_bias", ""),
                     cp.get("transformation_trigger", ""),
                     cp.get("contrast_design", ""),
                 ),

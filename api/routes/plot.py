@@ -11,62 +11,16 @@ from core.search_utils import hybrid_search
 router = APIRouter()
 
 
-@router.get("/structure")
-def get_book_structure(
-    book_name: str = Query(..., description="书名"),
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：三幕结构/英雄之旅）"),
-):
-    """查询全书结构（三幕/多幕）- 支持混合检索"""
-    columns = ["id", "book_name", "act_breakdown_json", "surface_theme", "deep_theme"]
     
-    filters = {"book_name": book_name}
-    results = hybrid_search(
-        table="book_structure",
-        collection="book_structure_kb",
-        columns=columns,
-        query=query,
-        filters=filters,
-        limit=20,
-    )
     
-    # 解析 JSON 字段
-    for item in results:
-        if "act_breakdown_json" in item:
-            try:
-                item["act_breakdown"] = json.loads(item.get("act_breakdown_json", "[]"))
-            except Exception:
-                item["act_breakdown"] = []
-
-    return {"success": True, "data": results, "total": len(results)}
 
 
-@router.get("/main-line")
-def get_main_plot(
-    book_name: str = Query(..., description="书名"),
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：主线剧情/核心冲突）"),
-):
-    """查询主线剧情 - 支持混合检索"""
-    columns = ["id", "book_name", "line_type", "theme", "chapter_distribution", "milestones_json"]
-    
-    filters = {"book_name": book_name, "line_type": "main"}
-    results = hybrid_search(
-        table="plot_lines",
-        collection="plot_lines_kb",
-        columns=columns,
-        query=query,
-        filters=filters,
-        limit=20,
-    )
-    
-    # 解析 JSON 字段
-    for item in results:
-        if "milestones_json" in item:
-            try:
-                item["milestones"] = json.loads(item.get("milestones_json", "[]"))
-            except Exception:
-                item["milestones"] = []
 
-    return {"success": True, "data": results, "total": len(results)}
+
+    
+    
+
+
 
 
 @router.get("/subplots")
@@ -97,60 +51,14 @@ def get_subplots(
     return {"success": True, "data": results, "total": len(results)}
 
 
-@router.get("/emotional-arc")
-def get_emotional_arc(
-    book_name: str = Query(..., description="书名"),
-    limit: int = Query(50, ge=1, le=500, description="返回数量"),
-    offset: int = Query(0, ge=0, description="偏移量"),
-):
-    """查询情感曲线"""
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    cursor.execute(
-        "SELECT * FROM emotional_arc WHERE book_name = ? LIMIT ? OFFSET ?",
-        (book_name, limit, offset),
-    )
-    rows = cursor.fetchall()
-
-    columns = ["id", "book_name", "arc_data_json"]
-    results = []
-    for row in rows:
-        item = dict(zip(columns, row))
-        try:
-            item["arc_data"] = json.loads(item.get("arc_data_json", "[]"))
-        except Exception:
-            item["arc_data"] = []
-        results.append(item)
-
-    return {"success": True, "data": results, "total": len(results)}
 
 
-@router.get("/cool-points")
-def get_climax_points(
-    book_name: str = Query(..., description="书名"),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    """查询高潮点分布"""
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    cursor.execute(
-        "SELECT * FROM climax_point_distribution WHERE book_name = ? LIMIT ? OFFSET ?",
-        (book_name, limit, offset),
-    )
-    rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "distribution_json"]
-    results = []
-    for row in rows:
-        item = dict(zip(columns, row))
-        try:
-            item["distribution"] = json.loads(item.get("distribution_json", "[]"))
-        except Exception:
-            item["distribution"] = []
-        results.append(item)
 
-    return {"success": True, "data": results, "total": len(results)}
+
+
+
+
 
 
 @router.get("/foreshadowing")
@@ -181,32 +89,9 @@ def get_foreshadowing(
     return {"success": True, "data": results, "total": len(results)}
 
 
-@router.get("/symbols")
-def get_symbols(
-    book_name: str = Query(..., description="书名"),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0)
-):
-    """查询象征体系"""
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    cursor.execute(
-        "SELECT * FROM symbol_system WHERE book_name = ? LIMIT ? OFFSET ?",
-        (book_name, limit, offset),
-    )
-    rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "symbols_json"]
-    results = []
-    for row in rows:
-        item = dict(zip(columns, row))
-        try:
-            item["symbols"] = json.loads(item.get("symbols_json", "[]"))
-        except Exception:
-            item["symbols"] = []
-        results.append(item)
 
-    return {"success": True, "data": results, "total": len(results)}
+
 
 
 @router.get("/chapter-functions")
@@ -306,40 +191,9 @@ def get_revelation_pacing(
     return {"success": True, "data": results, "total": len(results)}
 
 
-@router.get("/chapter-patterns")
-def get_chapter_patterns(
-    book_name: str = Query(..., description="书名"),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0)
-):
-    """查询章节模式总结"""
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    cursor.execute(
-        "SELECT * FROM chapter_patterns WHERE book_name = ? LIMIT ? OFFSET ?",
-        (book_name, limit, offset),
-    )
-    rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "opening_patterns", "ending_patterns", "common_transitions"]
-    results = []
-    for row in rows:
-        item = dict(zip(columns, row))
-        try:
-            item["opening_patterns"] = json.loads(item.get("opening_patterns", "[]"))
-        except Exception:
-            item["opening_patterns"] = []
-        try:
-            item["ending_patterns"] = json.loads(item.get("ending_patterns", "[]"))
-        except Exception:
-            item["ending_patterns"] = []
-        try:
-            item["common_transitions"] = json.loads(item.get("common_transitions", "[]"))
-        except Exception:
-            item["common_transitions"] = []
-        results.append(item)
 
-    return {"success": True, "data": results, "total": len(results)}
+
 
 
 @router.get("/emotion-transitions")

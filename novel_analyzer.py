@@ -560,22 +560,7 @@ def generate_book_style_summary(book_name: str, category: str, manifest: Dict):
                 ]
             )
 
-        # 从 book_structure 表取数据
-        cursor.execute(
-            "SELECT surface_theme, deep_theme FROM book_structure WHERE book_name = ? LIMIT 1",
-            (book_name,),
-        )
-        bs_row = cursor.fetchone()
-        if bs_row:
-            style_info.extend(
-                [
-                    f"表层主题：{bs_row[0]}",
-                    f"深层主题：{bs_row[1]}",
-                ]
-            )
-
         # 从 climax_point_distribution 表取数据
-        # rhythm_pattern column removed
 
         author_desc = " | ".join(
             [s for s in style_info if s and "：" in s and s.split("：", 1)[1]]

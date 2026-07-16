@@ -31,14 +31,6 @@ class WorldSettingsItem(BaseModel):
     entity: str
     content: str
     tags: str
-    daily_life: str = ""
-    taboos: str = ""
-    conflict_roots: str = ""
-    geography: str = ""
-    economy: str = ""
-    culture: str = ""
-    causal_chain: str = ""
-    rules_exceptions: str = ""
 
 
 class WorldTimelineItem(BaseModel):
@@ -69,22 +61,15 @@ class CharacterProfileItem(BaseModel):
     identity: str = ""
     motivation: str = ""
     internal_conflict: str = ""
-    fatal_flaw: str = ""
     personality: str = ""
     relation_to_mc: str = ""
     relations_to_others: str = ""
     climax_or_fate: str = ""
     background: str = ""
-    desire_vs_need: str = ""
-    secrets: str = ""
-    fears: str = ""
-    social_masks: str = ""
-    growth_cost: str = ""
     speech_samples: str = ""
     behavior_samples: str = ""
     relationship_evolution: str = ""
     abilities: str = ""
-    arc_trajectory: str = ""
     internal_dilemma: str = ""
 
 

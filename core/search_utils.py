@@ -35,15 +35,12 @@ _OLD_ALLOWED_TABLES = {
     # Stage G
     "character_speech_style", "character_behavior_marks", "character_relationship_dynamics",
     # Stage H
-    "book_structure", "plot_lines", "emotional_arc", "climax_point_distribution",
-    "symbol_system", "revelation_pacing", "chapter_patterns",
+    "plot_lines", "revelation_pacing",
     "emotion_transition_patterns", "information_management",
     "climax_buildup_chains", "conflict_escalation",
     # Stage I
     "book_statistics",
     # 通用类型补强
-    "romance_lines", "mystery_clues", "fear_building", "progression_systems",
-    "genre_specific_techniques", "pov_switching_patterns",
     # 高级功能
     "cross_book_comparisons", "common_mistakes", "technique_combinations",
     # 元数据与服务层

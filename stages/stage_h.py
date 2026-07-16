@@ -833,22 +833,6 @@ class StageH(BaseStage):
             "genre_specific_techniques": 0,
             "pov_switching_patterns": 0,
         }
-
-        # 全书结构入库（6个字段）
-        for bs in results.get("book_structure", []):
-            bs_id = generate_id(bs["book_name"], "structure")
-            cursor.execute(
-                "INSERT OR REPLACE INTO book_structure VALUES (?,?,?,?,?)",
-                (
-                    bs_id,
-                    bs["book_name"],
-                    json.dumps(bs.get("act_breakdown", []), ensure_ascii=False),
-                    bs.get("surface_theme", ""),
-                    bs.get("deep_theme", ""),
-                ),
-            )
-            stats["book_structure"] += 1
-
         # 主线支线入库
         for pl in results.get("plot_lines", []):
             pl_id = generate_id(pl["book_name"], pl["line_type"], pl.get("theme", ""))
@@ -865,72 +849,8 @@ class StageH(BaseStage):
             )
             stats["plot_lines"] += 1
 
-        # ChromaDB 写入：book_structure + plot_lines
-        bs_items = []
-        for bs in results.get("book_structure", []):
-            bs_items.append({
-                "book_name": bs["book_name"],
-                "surface_theme": bs.get("surface_theme", ""),
-                "deep_theme": bs.get("deep_theme", ""),
-                "_chroma_text": f"{bs.get('surface_theme','')} {bs.get('deep_theme','')}",
-            })
-        if bs_items:
-            from core.chroma_utils import bulk_upsert_to_chroma
-            bulk_upsert_to_chroma("book_structure_kb", bs_items,
-                id_fields=["book_name"], text_field="_chroma_text",
-                metadata_fields=["book_name", "surface_theme", "deep_theme"])
 
-        pl_items = []
-        for pl in results.get("plot_lines", []):
-            pl_items.append({
-                "book_name": pl["book_name"],
-                "line_type": pl["line_type"],
-                "theme": pl.get("theme", ""),
-                "_chroma_text": f"{pl['line_type']}: {pl.get('theme','')}",
-            })
-        if pl_items:
-            bulk_upsert_to_chroma("plot_lines_kb", pl_items,
-                id_fields=["book_name", "line_type"], text_field="_chroma_text",
-                metadata_fields=["book_name", "line_type", "theme"])
 
-        # 情感曲线入库
-        for ea in results.get("emotional_arc", []):
-            ea_id = generate_id(ea["book_name"], "emotional_arc")
-            cursor.execute(
-                "INSERT OR REPLACE INTO emotional_arc VALUES (?,?,?)",
-                (
-                    ea_id,
-                    ea["book_name"],
-                    json.dumps(ea.get("arc_data", []), ensure_ascii=False),
-                ),
-            )
-            stats["emotional_arc"] += 1
-
-        # 高潮点分布入库
-        for cpd in results.get("climax_point_distribution", []):
-            cpd_id = generate_id(cpd["book_name"], "climax_points")
-            cursor.execute(
-                "INSERT OR REPLACE INTO climax_point_distribution VALUES (?,?,?)",
-                (
-                    cpd_id,
-                    cpd["book_name"],
-                    json.dumps(cpd.get("distribution", []), ensure_ascii=False),
-                ),
-            )
-            stats["climax_point_distribution"] += 1
-
-        # 象征体系入库
-        for ss in results.get("symbol_system", []):
-            ss_id = generate_id(ss["book_name"], "symbols")
-            cursor.execute(
-                "INSERT OR REPLACE INTO symbol_system VALUES (?,?,?)",
-                (
-                    ss_id,
-                    ss["book_name"],
-                    json.dumps(ss.get("symbols", []), ensure_ascii=False),
-                ),
-            )
-            stats["symbol_system"] += 1
 
         # 信息揭露节奏入库
         for rev in results.get("revelation_pacing", []):
@@ -949,21 +869,6 @@ class StageH(BaseStage):
                 ),
             )
             stats["revelation_pacing"] += 1
-
-        # 章节模式入库
-        for cp in results.get("chapter_patterns", []):
-            cp_id = generate_id(cp["book_name"], "patterns")
-            cursor.execute(
-                "INSERT OR REPLACE INTO chapter_patterns VALUES (?,?,?,?,?)",
-                (
-                    cp_id,
-                    cp["book_name"],
-                    json.dumps(cp.get("opening_patterns", []), ensure_ascii=False),
-                    json.dumps(cp.get("ending_patterns", []), ensure_ascii=False),
-                    json.dumps(cp.get("common_transitions", []), ensure_ascii=False),
-                ),
-            )
-            stats["chapter_patterns"] += 1
 
         # 情感转变铺垫入库
         for et in results.get("emotion_transition_patterns", []):
@@ -1027,110 +932,11 @@ class StageH(BaseStage):
             )
             stats["conflict_escalation"] += 1
 
-        # 感情线追踪入库
-        for rl in results.get("romance_lines", []):
-            rl_id = generate_id(rl["book_name"], rl["couple_a"], rl.get("couple_b", ""))
-            cursor.execute(
-                "INSERT OR REPLACE INTO romance_lines VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (
-                    rl_id,
-                    rl["book_name"],
-                    rl["couple_a"],
-                    rl.get("couple_b", ""),
-                    rl.get("line_type", ""),
-                    json.dumps(rl.get("development_stages", []), ensure_ascii=False),
-                    json.dumps(rl.get("sweet_points", []), ensure_ascii=False),
-                    json.dumps(rl.get("angst_points", []), ensure_ascii=False),
-                    json.dumps(rl.get("interaction_patterns", []), ensure_ascii=False),
-                    rl.get("resolution", ""),
-                ),
-            )
-            stats["romance_lines"] += 1
 
-        # 线索与推理链入库
-        for mc in results.get("mystery_clues", []):
-            mc_id = generate_id(mc["book_name"], mc["clue_name"])
-            cursor.execute(
-                "INSERT OR REPLACE INTO mystery_clues VALUES (?,?,?,?,?,?,?,?,?)",
-                (
-                    mc_id,
-                    mc["book_name"],
-                    mc["clue_name"],
-                    mc.get("clue_type", ""),
-                    mc.get("planted_chapter", ""),
-                    mc.get("payoff_chapter", ""),
-                    mc.get("red_herring", 0),
-                    mc.get("misdirection_method", ""),
-                    mc.get("twist_design", ""),
-                ),
-            )
-            stats["mystery_clues"] += 1
 
-        # 恐惧/氛围构建链入库
-        for fb in results.get("fear_building", []):
-            fb_id = generate_id(fb["book_name"], fb["fear_type"])
-            cursor.execute(
-                "INSERT OR REPLACE INTO fear_building VALUES (?,?,?,?,?,?)",
-                (
-                    fb_id,
-                    fb["book_name"],
-                    fb["fear_type"],
-                    json.dumps(fb.get("building_steps", []), ensure_ascii=False),
-                    json.dumps(fb.get("atmosphere_techniques", []), ensure_ascii=False),
-                    fb.get("climax_moment", ""),
-                ),
-            )
-            stats["fear_building"] += 1
 
-        # 升级/成长体系入库
-        for ps in results.get("progression_systems", []):
-            ps_id = generate_id(ps["book_name"], ps["system_type"])
-            cursor.execute(
-                "INSERT OR REPLACE INTO progression_systems VALUES (?,?,?,?,?,?,?,?)",
-                (
-                    ps_id,
-                    ps["book_name"],
-                    ps["system_type"],
-                    json.dumps(ps.get("levels", []), ensure_ascii=False),
-                    json.dumps(ps.get("upgrade_conditions", []), ensure_ascii=False),
-                    json.dumps(ps.get("power_comparison", []), ensure_ascii=False),
-                    json.dumps(ps.get("milestones", []), ensure_ascii=False),
-                    ps.get("growth_pattern", ""),
-                ),
-            )
-            stats["progression_systems"] += 1
 
-        # 类型特定技法入库
-        for gt in results.get("genre_specific_techniques", []):
-            gt_id = generate_id(gt["book_name"], gt["technique_name"])
-            cursor.execute(
-                "INSERT OR REPLACE INTO genre_specific_techniques VALUES (?,?,?,?,?,?)",
-                (
-                    gt_id,
-                    gt["book_name"],
-                    gt.get("genre_tag", ""),
-                    gt["technique_name"],
-                    gt.get("technique_category", ""),
-                    gt.get("analysis", ""),
-                ),
-            )
-            stats["genre_specific_techniques"] += 1
 
-        # 多视角切换模式入库
-        for pp in results.get("pov_switching_patterns", []):
-            pp_id = generate_id(pp["book_name"], pp["pattern_type"])
-            cursor.execute(
-                "INSERT OR REPLACE INTO pov_switching_patterns VALUES (?,?,?,?,?,?)",
-                (
-                    pp_id,
-                    pp["book_name"],
-                    pp["pattern_type"],
-                    json.dumps(pp.get("pov_characters", []), ensure_ascii=False),
-                    pp.get("switching_triggers", ""),
-                    pp.get("frequency", ""),
-                ),
-            )
-            stats["pov_switching_patterns"] += 1
 
         self.db.commit()
         logger.info(

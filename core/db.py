@@ -27,9 +27,9 @@ class DatabaseManager:
         "sensory_mappings": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, category TEXT, emotion TEXT, show_not_tell TEXT, analysis TEXT)",
         
         # Stage D: 世界观与人物
-        "world_settings": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, module TEXT, entity TEXT, content TEXT, tags TEXT, daily_life TEXT, taboos TEXT, conflict_roots TEXT, geography TEXT, economy TEXT, culture TEXT, causal_chain TEXT, rules_exceptions TEXT)",
+        "world_settings": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, module TEXT, entity TEXT, content TEXT, tags TEXT)",
         "golden_finger": "(id TEXT PRIMARY KEY, book_name TEXT, name TEXT, type TEXT, abilities TEXT, upgrade_path TEXT, limitations TEXT, cost_layers TEXT, interaction_with_plot TEXT, source_chapter TEXT)",
-        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, fatal_flaw TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, desire_vs_need TEXT, secrets TEXT, fears TEXT, social_masks TEXT, growth_cost TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, arc_trajectory TEXT, internal_dilemma TEXT, decision_pattern TEXT, cognitive_bias TEXT, transformation_trigger TEXT, contrast_design TEXT)",
+        "character_profiles": "(id TEXT PRIMARY KEY, book_name TEXT, author TEXT, category TEXT, name TEXT, role_type TEXT, appearance TEXT, quirks TEXT, identity TEXT, motivation TEXT, internal_conflict TEXT, personality TEXT, relation_to_mc TEXT, relations_to_others TEXT, climax_or_fate TEXT, background TEXT, speech_samples TEXT, behavior_samples TEXT, relationship_evolution TEXT, abilities TEXT, internal_dilemma TEXT, transformation_trigger TEXT, contrast_design TEXT)",
         "world_timeline": "(id TEXT PRIMARY KEY, book_name TEXT, era_or_year TEXT, event_name TEXT, event_description TEXT, impact TEXT)",
         
         # Stage D 扩展: 势力关系网络与设定演变
@@ -52,19 +52,14 @@ class DatabaseManager:
         "character_relationship_dynamics": "(id TEXT PRIMARY KEY, book_name TEXT, character_a TEXT, character_b TEXT, timeline_json TEXT)",
         
         # Stage H: 全书宏观分析
-        "book_structure": "(id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)",
         "plot_lines": "(id TEXT PRIMARY KEY, book_name TEXT, line_type TEXT, theme TEXT, chapter_distribution TEXT, milestones_json TEXT)",
-        "emotional_arc": "(id TEXT PRIMARY KEY, book_name TEXT, arc_data_json TEXT)",
-        "climax_point_distribution": "(id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT)",
-        "symbol_system": "(id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)",
         
         # Stage F 扩展: 转场样本与风格总结
         "transition_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, transition_type TEXT, original_text TEXT, technique_analysis TEXT, writing_quality INTEGER DEFAULT 5)",
         "style_summaries": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, summary_type TEXT, scene_or_desc_type TEXT, style_description TEXT, key_features TEXT)",
         
-        # Stage H 扩展: 信息揭露节奏、章节模式、情感转变铺垫
+        # Stage H 扩展: 信息揭露节奏、情感转变铺垫
         "revelation_pacing": "(id TEXT PRIMARY KEY, book_name TEXT, revelation_name TEXT, reveal_chapter TEXT, reveal_method TEXT, impact TEXT)",
-        "chapter_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, opening_patterns TEXT, ending_patterns TEXT, common_transitions TEXT)",
         "emotion_transition_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, transition_type TEXT, foreshadowing_method TEXT)",
         
         # Stage H 扩展: 信息管理策略、高潮构建链、冲突升级阶梯
@@ -81,19 +76,14 @@ class DatabaseManager:
         
         # ===== 通用类型补强 =====
         # 感情线追踪（言情/爱情/所有有CP的作品）
-        "romance_lines": "(id TEXT PRIMARY KEY, book_name TEXT, couple_a TEXT, couple_b TEXT, line_type TEXT, development_stages_json TEXT, sweet_points_json TEXT, angst_points_json TEXT, interaction_patterns_json TEXT, resolution TEXT)",
         
         # 线索与推理链（悬疑/推理）
-        "mystery_clues": "(id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, twist_design TEXT)",
         
         # 恐惧/氛围构建链（克苏鲁/恐怖/悬疑）
-        "fear_building": "(id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT)",
         
         # 升级/成长体系（玄幻/仙侠/游戏竞技/职场）
-        "progression_systems": "(id TEXT PRIMARY KEY, book_name TEXT, system_type TEXT, levels_json TEXT, upgrade_conditions_json TEXT, power_comparison_json TEXT, milestones_json TEXT, growth_pattern TEXT)",
         
         # 类型特定技法（通用灵活表，通过 genre_tag 区分类型）
-        "genre_specific_techniques": "(id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT)",
         
         # 动作/战斗场景范文（武侠/玄幻/竞技）
         "action_scene_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, action_type TEXT, original_text TEXT, technique_analysis TEXT, pacing_analysis TEXT, sensory_details TEXT, writing_quality INTEGER DEFAULT 5)",
@@ -112,7 +102,6 @@ class DatabaseManager:
         "memorable_quotes": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, quote_text TEXT, context TEXT, technique_analysis TEXT, quote_type TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # 多视角切换模式
-        "pov_switching_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT)",
         
         # ===== 知识库搜索支撑层 =====
         # 正文质量评审（评审结果存储在知识库侧，方便历史对比）
@@ -143,6 +132,16 @@ class DatabaseManager:
         
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",
+        # symbol_system": " (id TEXT PRIMARY KEY, book_name TEXT, symbols_json TEXT)
+        # romance_lines": " (id TEXT PRIMARY KEY, book_name TEXT, couple_a TEXT, couple_b TEXT, line_type TEXT, development_stages_json TEXT, sweet_points_json TEXT, angst_points_json TEXT, interaction_patterns_json TEXT, resolution TEXT)
+        # progression_systems": " (id TEXT PRIMARY KEY, book_name TEXT, system_type TEXT, levels_json TEXT, upgrade_conditions_json TEXT, power_comparison_json TEXT, milestones_json TEXT, growth_pattern TEXT)
+        # pov_switching_patterns": " (id TEXT PRIMARY KEY, book_name TEXT, pattern_type TEXT, pov_characters_json TEXT, switching_triggers TEXT, frequency TEXT)
+        # mystery_clues": " (id TEXT PRIMARY KEY, book_name TEXT, clue_name TEXT, clue_type TEXT, planted_chapter TEXT, payoff_chapter TEXT, red_herring INTEGER, misdirection_method TEXT, twist_design TEXT)
+        # genre_specific_techniques": " (id TEXT PRIMARY KEY, book_name TEXT, genre_tag TEXT, technique_name TEXT, technique_category TEXT, analysis TEXT)
+        # fear_building": " (id TEXT PRIMARY KEY, book_name TEXT, fear_type TEXT, building_steps_json TEXT, atmosphere_techniques_json TEXT, climax_moment TEXT)
+        # emotional_arc": " (id TEXT PRIMARY KEY, book_name TEXT, arc_data_json TEXT)
+        # climax_point_distribution": " (id TEXT PRIMARY KEY, book_name TEXT, distribution_json TEXT)
+        # book_structure": " (id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)
     }
 
     CHAPTER_ID_TABLES = ["skills", "plot_arcs", "sensory_mappings", "dialogue_samples", "description_samples", "chapter_functions"]

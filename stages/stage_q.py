@@ -354,13 +354,6 @@ class QualityChecker:
     def check_stage_h(self, book_name: str, results: Any) -> List[QualityIssue]:
         """检查 Stage H（全书宏观分析）质量"""
         issues = []
-        if isinstance(results, dict):
-            if not results.get("book_structure"):
-                issues.append(QualityIssue(
-                    stage="H", book_name=book_name, severity="high",
-                    description="未生成书籍结构分析",
-                    suggestion="建议检查 Stage A 的摘要是否覆盖了全书",
-                ))
         return issues
 
     def run_check(self, stage: str, book_name: str, results: Any) -> List[QualityIssue]:

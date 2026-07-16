@@ -54,8 +54,6 @@ class ChromaManager:
         "story_events_kb": "关键事件向量库",
         "event_causal_edges_kb": "事件因果关系向量库",
         # Stage H: 全书宏观分析
-        "book_structure_kb": "全书结构向量库",
-        "plot_lines_kb": "剧情线向量库",
     }
 
     def __init__(self, chroma_path: Optional[str] = None):
