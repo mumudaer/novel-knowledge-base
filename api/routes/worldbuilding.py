@@ -21,8 +21,7 @@ def get_world_settings(
 ):
     """查询世界观设定（混合检索）"""
     columns = ["id", "book_name", "author", "category", "module", "entity",
-               "content", "tags", "daily_life", "taboos", "conflict_roots",
-               "geography", "economy", "culture", "causal_chain", "rules_exceptions"]
+               "content", "tags",                ]
     
     filters = {}
     if book_name:
@@ -72,13 +71,13 @@ def get_conflicts(
     db = get_db_manager()
     cursor = db.connect().cursor()
     cursor.execute(
-        "SELECT book_name, module, entity, conflict_roots FROM world_settings WHERE book_name = ? AND conflict_roots != ''",
+        "SELECT book_name, module, entity FROM world_settings WHERE book_name = ?'",
         (book_name,),
     )
     rows = cursor.fetchall()
 
     results = [
-        {"book_name": r[0], "module": r[1], "entity": r[2], "conflict_roots": r[3]}
+        {"book_name": r[0], "module": r[1], "entity": r[2]}
         for r in rows
     ]
     return {"success": True, "data": results, "total": len(results)}
@@ -92,8 +91,7 @@ def search_world_settings(
 ):
     """语义搜索世界观设定（混合检索）"""
     columns = ["id", "book_name", "author", "category", "module", "entity",
-               "content", "tags", "daily_life", "taboos", "conflict_roots",
-               "geography", "economy", "culture", "causal_chain", "rules_exceptions"]
+               "content", "tags",                ]
     
     filters = {}
     if book_name:

@@ -40,7 +40,7 @@ class DatabaseManager:
         "macro_outlines": "(id TEXT PRIMARY KEY, book_name TEXT, category TEXT, volume_index INTEGER, chapter_range TEXT, theme TEXT, conflict TEXT, beats_json TEXT, arc TEXT)",
         "plot_foreshadowing": "(id TEXT PRIMARY KEY, book_name TEXT, hook_name TEXT, planted_chapter TEXT, planned_payoff TEXT, status TEXT, payoff_timing TEXT, scope_type TEXT, resolved_chapter TEXT, last_advanced_chapter TEXT)",
         "entity_state_tracker": "(id TEXT PRIMARY KEY, book_name TEXT, entity_name TEXT, chapter_range TEXT, current_state_json TEXT)",
-        "chapter_functions": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, function_type TEXT, pacing_type TEXT, structure_pattern_json TEXT, hook_type TEXT, hook_intensity TEXT, hook_content TEXT, cool_point_type TEXT, arc_length TEXT, information_gap_json TEXT, active_plotlines TEXT)",
+        "chapter_functions": "(id TEXT PRIMARY KEY,  book_name TEXT,  chapter_id TEXT,  function_type TEXT,  pacing_type TEXT,  structure_pattern_json TEXT,  hook_type TEXT,  hook_content TEXT)",
         
         # Stage F: 样本库
         "dialogue_samples": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, scene_type TEXT, original_text TEXT, emotional_tension TEXT, subtext TEXT, plot_function TEXT, writing_quality INTEGER DEFAULT 5)",
@@ -128,7 +128,6 @@ class DatabaseManager:
         "event_causal_edges": "(id TEXT PRIMARY KEY, book_name TEXT, source_event_id TEXT, target_event_id TEXT, relation_type TEXT, relation_detail TEXT)",
         
         # 题材裁决规则（后处理聚合）
-        "genre_rules": "(id TEXT PRIMARY KEY, genre TEXT, technique_name TEXT, frequency INTEGER, priority_rank INTEGER, applicable_scenarios TEXT, benchmark_books TEXT, updated_at TEXT)",
         
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",

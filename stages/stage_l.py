@@ -255,7 +255,7 @@ class StageL(BaseStage):
             
             elif comparison_dimension == "人物塑造":
                 cursor.execute(
-                    "SELECT name, role_type, desire_vs_need, fatal_flaw, arc_trajectory FROM character_profiles WHERE book_name=? LIMIT 5",
+                    "SELECT name, role_type FROM character_profiles WHERE book_name=? LIMIT 5",
                     (book_name,),
                 )
                 for row in cursor.fetchall():

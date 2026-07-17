@@ -23,12 +23,11 @@ def get_character_profile(
     columns = [
         "id", "book_name", "author", "category", "name", "role_type",
         "appearance", "quirks", "identity", "motivation", "internal_conflict",
-        "fatal_flaw", "personality", "relation_to_mc",
+        "personality", "relation_to_mc",
         "relations_to_others", "climax_or_fate", "background",
-        "desire_vs_need", "secrets", "fears", "social_masks",
-        "growth_cost", "speech_samples", "behavior_samples",
+                "speech_samples", "behavior_samples",
         "relationship_evolution", "abilities", "arc_trajectory", "internal_dilemma",
-        "decision_pattern", "cognitive_bias", "transformation_trigger", "contrast_design",
+        "transformation_trigger", "contrast_design",
     ]
     
     filters = {}

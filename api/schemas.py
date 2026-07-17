@@ -137,8 +137,6 @@ class ChapterFunctionItem(BaseModel):
     structure_pattern_json: str
     hook_type: str
     hook_content: str
-    information_gap_json: str
-    active_plotlines: str = ""
 
 
 # ===================== 写作风格查询 =====================

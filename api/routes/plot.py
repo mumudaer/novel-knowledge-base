@@ -117,7 +117,7 @@ def get_chapter_functions(
 
     columns = ["id", "book_name", "chapter_id", "function_type",
                "structure_pattern_json", "hook_type", "hook_content",
-               "information_gap_json", "active_plotlines"]
+]
 
     results = []
     for row in rows:
@@ -126,14 +126,7 @@ def get_chapter_functions(
             item["structure_pattern"] = json.loads(item.get("structure_pattern_json", "{}"))
         except Exception:
             item["structure_pattern"] = {}
-        try:
-            item["information_gap"] = json.loads(item.get("information_gap_json", "{}"))
-        except Exception:
-            item["information_gap"] = {}
-        try:
-            item["active_plotlines"] = json.loads(item.get("active_plotlines", "[]"))
-        except Exception:
-            item["active_plotlines"] = []
+
         results.append(item)
 
     return {"success": True, "data": results, "total": len(results)}

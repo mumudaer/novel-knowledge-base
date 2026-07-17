@@ -270,20 +270,11 @@ class StageE(BaseStage):
         "ending": "结尾方式(悬念收尾/情感余韵/转折钩子/平静过渡)"
       }},
       "hook_type": "章末钩子类型(突然揭示/紧急危机/未完成动作/身份反转/两难选择/神秘物品/时间限制/承诺威胁/离奇消失/言外之意/意象钩子/回声钩子/留白钩子/无钩子)",
-      "hook_intensity": "悬念强度(1好奇/2关切/3迫切/4生存/5终极)",
       "hook_content": "钩子内容简述(20字内)",
-      "cool_point_type": "爽点类型(打脸/智斗/情感/真相/关系/升级/无爽点)",
-      "arc_length": "所属弧线类型(短弧2-3章/中弧5-8章/长弧全书/无弧线)",
-      "information_gap": {{
-        "reader_knows": ["本章片段中读者知道但角色不知道的信息(无则留空)"],
-        "character_knows": ["本章片段中角色知道但读者不知道的信息(无则留空)"],
-        "dramatic_effect": "产生的戏剧效果(无则留空)"
-      }},
-      "active_plotlines": ["本章推进的剧情线(如:主线-复仇/支线-感情线/支线-势力线/支线-成长线)"]
     }}
   ]
 }}
-(禁止反引号，如果没有信息差对应数组留空。hook_intensity用数字1-5。active_plotlines必须标注本章推进了哪些剧情线。必须返回{len(batch_chapters)}个章节的分析结果)"""
+(禁止反引号。必须返回{len(batch_chapters)}个章节的分析结果)"""
 
                 try:
                     resp = ollama_chat(prompt_func, 0.2, "E")
@@ -298,12 +289,7 @@ class StageE(BaseStage):
                                     "pacing_type": cf.get("pacing_type", "未知"),
                                     "structure_pattern": cf.get("structure_pattern", {}),
                                     "hook_type": cf.get("hook_type", "无钩子"),
-                                    "hook_intensity": cf.get("hook_intensity", "0"),
                                     "hook_content": cf.get("hook_content", ""),
-                                    "cool_point_type": cf.get("cool_point_type", "无爽点"),
-                                    "arc_length": cf.get("arc_length", "无弧线"),
-                                    "information_gap": cf.get("information_gap", {}),
-                                    "active_plotlines": cf.get("active_plotlines", []),
                                 })
                 except Exception as e:
                     logger.warning(f"⚠️ [阶段E] 章节功能分类批量处理失败 (卷{vol_idx+1}, 批次{batch_start//batch_size+1}): {e}")
@@ -382,19 +368,16 @@ class StageE(BaseStage):
             )
             stats["state_tracker"] += 1
 
-        # 章节功能分类入库（9个字段）
+        # 章节功能分类入库
         for cf in results.get("chapter_functions", []):
             cf_id = generate_id(cf["book_name"], cf["chapter_id"])
             cursor.execute(
-                "INSERT OR REPLACE INTO chapter_functions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO chapter_functions VALUES (?,?,?,?,?,?,?,?)",
                 (cf_id, cf["book_name"], cf["chapter_id"], cf.get("function_type", ""),
                  cf.get("pacing_type", ""),
                  json.dumps(cf.get("structure_pattern", {}), ensure_ascii=False),
-                 cf.get("hook_type", ""), cf.get("hook_intensity", "0"),
-                 cf.get("hook_content", ""),
-                 cf.get("cool_point_type", ""), cf.get("arc_length", ""),
-                 json.dumps(cf.get("information_gap", {}), ensure_ascii=False),
-                 json.dumps(cf.get("active_plotlines", []), ensure_ascii=False)),
+                 cf.get("hook_type", ""), cf.get("hook_content", ""),
+                ),
             )
             stats["chapter_functions"] += 1
 
