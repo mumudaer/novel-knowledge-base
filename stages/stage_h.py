@@ -34,30 +34,18 @@ class StageH(BaseStage):
             stage_e_res: Stage E 的卷大纲结果
 
         Returns:
-            包含 book_structure, plot_lines, emotional_arc, climax_point_distribution, symbol_system,
-            revelation_pacing, chapter_patterns, emotion_transition_patterns, information_management,
+            包含 plot_lines, revelation_pacing, emotion_transition_patterns, information_management,
             climax_buildup_chains, conflict_escalation 的字典
         """
         logger.info(f"=== 阶段八：全书级宏观分析 ({self.book_name}) ===")
 
         result = {
-            "book_structure": [],
             "plot_lines": [],
-            "emotional_arc": [],
-            "climax_point_distribution": [],
-            "symbol_system": [],
             "revelation_pacing": [],
-            "chapter_patterns": [],
             "emotion_transition_patterns": [],
             "information_management": [],
             "climax_buildup_chains": [],
             "conflict_escalation": [],
-            "romance_lines": [],
-            "mystery_clues": [],
-            "fear_building": [],
-            "progression_systems": [],
-            "genre_specific_techniques": [],
-            "pov_switching_patterns": [],
         }
 
         if not stage_a_res:
@@ -125,8 +113,7 @@ class StageH(BaseStage):
         if "structure" not in groups_done:
             structure_data = self._extract_structure_group(summaries_text, volumes_text)
             for key in [
-                "book_structure", "plot_lines", "emotional_arc",
-                "climax_point_distribution", "symbol_system",
+                "plot_lines",
             ]:
                 if key in structure_data:
                     result[key] = structure_data[key]
@@ -148,7 +135,7 @@ class StageH(BaseStage):
         structure_context = self._build_group_context(structure_data)
 
         # 第二组：技法组
-        tk = ["revelation_pacing", "chapter_patterns", "emotion_transition_patterns", "information_management", "climax_buildup_chains", "conflict_escalation"]
+        tk = ["revelation_pacing", "emotion_transition_patterns", "information_management", "climax_buildup_chains", "conflict_escalation"]
         if "technique" not in groups_done:
             technique_data = self._extract_technique_group(summaries_text, volumes_text, structure_context)
             for key in tk:
@@ -161,7 +148,7 @@ class StageH(BaseStage):
         combined_context = structure_context + "\n" + technique_context
 
         # 第三组：类型组
-        gk = ["romance_lines", "mystery_clues", "fear_building", "progression_systems", "genre_specific_techniques", "pov_switching_patterns"]
+        gk = []
         if "genre" not in groups_done:
             genre_data = self._extract_genre_group(summaries_text, volumes_text, combined_context)
             for key in gk:
@@ -172,23 +159,12 @@ class StageH(BaseStage):
             logger.info("✅ [阶段H] 类型组已完成，跳过")
 
         logger.info(
-            f"✅ [阶段H战报] 结构: {len(result['book_structure'])} | "
-            f"剧情线: {len(result['plot_lines'])} | "
-            f"情感曲线: {len(result['emotional_arc'])} | "
-            f"高潮点分布: {len(result['climax_point_distribution'])} | "
-            f"象征体系: {len(result['symbol_system'])} | "
+            f"✅ [阶段H战报] 剧情线: {len(result['plot_lines'])} | "
             f"信息揭露: {len(result['revelation_pacing'])} | "
-            f"章节模式: {len(result['chapter_patterns'])} | "
             f"情感铺垫: {len(result['emotion_transition_patterns'])} | "
             f"信息管理: {len(result['information_management'])} | "
             f"高潮构建: {len(result['climax_buildup_chains'])} | "
-            f"冲突升级: {len(result['conflict_escalation'])} | "
-            f"感情线: {len(result['romance_lines'])} | "
-            f"线索推理: {len(result['mystery_clues'])} | "
-            f"恐惧构建: {len(result['fear_building'])} | "
-            f"升级体系: {len(result['progression_systems'])} | "
-            f"类型技法: {len(result['genre_specific_techniques'])} | "
-            f"视角切换: {len(result['pov_switching_patterns'])}"
+            f"冲突升级: {len(result['conflict_escalation'])}"
         )
 
         # 更新知识图谱：剧情线节点
@@ -815,23 +791,12 @@ class StageH(BaseStage):
         """将 Stage H 结果写入数据库"""
         cursor = self.db.connect().cursor()
         stats = {
-            "book_structure": 0,
             "plot_lines": 0,
-            "emotional_arc": 0,
-            "climax_point_distribution": 0,
-            "symbol_system": 0,
             "revelation_pacing": 0,
-            "chapter_patterns": 0,
             "emotion_transition_patterns": 0,
             "information_management": 0,
             "climax_buildup_chains": 0,
             "conflict_escalation": 0,
-            "romance_lines": 0,
-            "mystery_clues": 0,
-            "fear_building": 0,
-            "progression_systems": 0,
-            "genre_specific_techniques": 0,
-            "pov_switching_patterns": 0,
         }
         # 主线支线入库
         for pl in results.get("plot_lines", []):
@@ -940,19 +905,11 @@ class StageH(BaseStage):
 
         self.db.commit()
         logger.info(
-            f"   ✅ [阶段H战报] 结构: {stats['book_structure']} | "
-            f"剧情线: {stats['plot_lines']} | 情感曲线: {stats['emotional_arc']} | "
-            f"高潮点分布: {stats['climax_point_distribution']} | 象征体系: {stats['symbol_system']} | "
-            f"信息揭露: {stats['revelation_pacing']} | 章节模式: {stats['chapter_patterns']} | "
+            f"   ✅ [阶段H战报] 剧情线: {stats['plot_lines']} | "
+            f"信息揭露: {stats['revelation_pacing']} | "
             f"情感铺垫: {stats['emotion_transition_patterns']} | "
             f"信息管理: {stats['information_management']} | "
             f"高潮构建: {stats['climax_buildup_chains']} | "
-            f"冲突升级: {stats['conflict_escalation']} | "
-            f"感情线: {stats['romance_lines']} | "
-            f"线索推理: {stats['mystery_clues']} | "
-            f"恐惧构建: {stats['fear_building']} | "
-            f"升级体系: {stats['progression_systems']} | "
-            f"类型技法: {stats['genre_specific_techniques']} | "
-            f"视角切换: {stats['pov_switching_patterns']}"
+            f"冲突升级: {stats['conflict_escalation']}"
         )
         return stats

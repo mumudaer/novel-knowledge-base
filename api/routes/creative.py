@@ -1653,31 +1653,8 @@ def get_anti_ai_patterns():
 
 @router.get("/genre-rules/{genre}")
 def get_genre_rules(
-    genre: str,
-    limit: int = Query(20, ge=1, le=100),
+    genre: str = Query(..., description="题材标签"),
 ):
-    """
-    获取指定题材的技法优先级排名
+    """查询该题材的裁决规则（genre_rules表已废弃）"""
+    return {"success": True, "data": [], "total": 0}
 
-    返回该题材下所有技法按频率排序的排名，
-    供创作 Skill 查询“玄幻题材哪些技法最重要”等问题。
-    """
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-    cursor.execute(
-        "SELECT technique_name, frequency, priority_rank, applicable_scenarios, benchmark_books "
-        "FROM genre_rules WHERE genre = ? ORDER BY priority_rank LIMIT ?",
-        (genre, limit),
-    )
-    rows = cursor.fetchall()
-    columns = ["technique_name", "frequency", "priority_rank", "applicable_scenarios", "benchmark_books"]
-    rules = [dict(zip(columns, row)) for row in rows]
-
-    return {
-        "success": True,
-        "data": {
-            "genre": genre,
-            "total_rules": len(rules),
-            "rules": rules,
-        },
-    }

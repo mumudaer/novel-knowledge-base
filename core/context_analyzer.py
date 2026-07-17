@@ -120,7 +120,6 @@ class ContextAnalyzer:
         # 根据创作阶段和子类型确定查询策略
         if creation_stage == "世界观设计" or sub_type in ["力量体系设计", "社会结构设计", "地理设计"]:
             strategy["excerpts"].append({"table": "world_settings", "query": " ".join(key_elements)})
-            strategy["techniques"].append({"table": "genre_specific_techniques", "category": "设定设计"})
             strategy["structure_tips"].append({"table": "cross_book_comparisons", "dimension": "世界观设计"})
 
         elif creation_stage == "人物设计" or sub_type in ["角色对话", "人物塑造", "关系设计"]:
@@ -130,7 +129,6 @@ class ContextAnalyzer:
             strategy["common_mistakes"].append({"table": "common_mistakes", "dimension": "人物"})
 
         elif creation_stage == "大纲设计" or sub_type in ["大纲设计", "结构设计", "情节编排"]:
-            strategy["structure_tips"].append({"table": "book_structure", "query": " ".join(key_elements)})
             strategy["structure_tips"].append({"table": "macro_outlines", "query": " ".join(key_elements)})
             strategy["techniques"].append({"table": "climax_buildup_chains", "query": " ".join(key_elements)})
             strategy["common_mistakes"].append({"table": "common_mistakes", "dimension": "情节"})
@@ -145,7 +143,6 @@ class ContextAnalyzer:
 
             elif sub_type in ["感情线对话", "暧昧对话", "情感对话"]:
                 strategy["excerpts"].append({"table": "dialogue_samples", "scene_type": "感情"})
-                strategy["excerpts"].append({"table": "romance_lines", "query": " ".join(key_elements)})
                 strategy["techniques"].append({"table": "technique_combinations", "scene_type": "对话"})
                 strategy["common_mistakes"].append({"table": "common_mistakes", "dimension": "对话"})
 
@@ -161,7 +158,6 @@ class ContextAnalyzer:
                 strategy["common_mistakes"].append({"table": "common_mistakes", "dimension": "节奏"})
 
             elif sub_type in ["悬疑场景", "推理场景", "线索揭露"]:
-                strategy["excerpts"].append({"table": "mystery_clues", "query": " ".join(key_elements)})
                 strategy["techniques"].append({"table": "information_management", "query": " ".join(key_elements)})
                 strategy["common_mistakes"].append({"table": "common_mistakes", "dimension": "情节"})
 
