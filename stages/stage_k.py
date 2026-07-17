@@ -151,7 +151,7 @@ class StageK(BaseStage):
 
             # 获取全书结构
             cursor.execute(
-                "SELECT surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1",
+
                 (book_name,),
             )
             bs_row = cursor.fetchone()

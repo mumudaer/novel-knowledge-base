@@ -135,7 +135,7 @@ class StageJ(BaseStage):
 
             # 检索章节模式
             cursor.execute(
-                "SELECT opening_patterns, ending_patterns, common_transitions FROM chapter_patterns WHERE book_name=? LIMIT 1",
+
                 (book_name,),
             )
             pattern_rows = cursor.fetchall()

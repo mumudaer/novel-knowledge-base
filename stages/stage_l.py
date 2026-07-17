@@ -37,14 +37,12 @@ class StageL(BaseStage):
         
         # 根据维度映射到对应的表
         dimension_table_map = {
-            "感情线设计": ("romance_lines", "couple_a"),
             "高潮铺垫方式": ("climax_buildup_chains", "climax_name"),
             "冲突升级模式": ("conflict_escalation", "conflict_line"),
             "人物塑造": ("character_profiles", "name"),
             "世界观设计": ("world_settings", "module"),
             "对话风格": ("character_speech_style", "character_name"),
             "描写技法": ("description_samples", "description_type"),
-            "结构编排": ("book_structure", "surface_theme"),
             "信息管理": ("information_management", "strategy_type"),
             "伏笔设计": ("plot_foreshadowing", "hook_name"),
         }
@@ -167,14 +165,12 @@ class StageL(BaseStage):
         
         # 根据维度映射到对应的数据表
         dimension_to_tables = {
-            "感情线设计": ["romance_lines"],
             "高潮铺垫方式": ["climax_buildup_chains", "climax_excerpts"],
             "冲突升级模式": ["conflict_escalation"],
             "人物塑造": ["character_profiles"],
             "世界观设计": ["world_settings"],
             "对话风格": ["dialogue_samples", "character_speech_style"],
             "描写技法": ["description_samples"],
-            "结构编排": ["book_structure", "macro_outlines"],
             "信息管理": ["information_management"],
             "伏笔设计": ["plot_foreshadowing"],
         }
@@ -219,7 +215,7 @@ class StageL(BaseStage):
             # 根据维度收集相关数据
             if comparison_dimension == "感情线设计":
                 cursor.execute(
-                    "SELECT couple_a, couple_b, line_type, development_stages_json, sweet_points_json, angst_points_json FROM romance_lines WHERE book_name=? LIMIT 5",
+
                     (book_name,),
                 )
                 for row in cursor.fetchall():
@@ -305,7 +301,7 @@ class StageL(BaseStage):
             
             elif comparison_dimension == "结构编排":
                 cursor.execute(
-                    "SELECT act_breakdown_json, surface_theme, deep_theme FROM book_structure WHERE book_name=? LIMIT 1",
+
                     (book_name,),
                 )
                 row = cursor.fetchone()
@@ -334,7 +330,7 @@ class StageL(BaseStage):
             
             elif comparison_dimension == "伏笔设计":
                 cursor.execute(
-                    "SELECT hook_name, planted_chapter, planned_payoff, status, resolution_excerpt FROM plot_foreshadowing WHERE book_name=? LIMIT 5",
+                    "SELECT hook_name, planted_chapter, planned_payoff, status FROM plot_foreshadowing WHERE book_name=? LIMIT 5",
                     (book_name,),
                 )
                 for row in cursor.fetchall():

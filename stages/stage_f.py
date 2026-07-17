@@ -304,7 +304,6 @@ class StageF(BaseStage):
                                 "book_name": self.book_name,
                                 "chapter_id": chap_id,
                                 "pattern_type": st.get("pattern_type"),
-                                "ratio_estimate": st.get("ratio_estimate", ""),
                                 "switching_triggers": st.get("switching_triggers", ""),
                                 "original_example": st.get("original_example"),
                                 "writing_quality": st.get("writing_quality", 5),

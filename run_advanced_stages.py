@@ -16,6 +16,7 @@
     然后运行本脚本 --incremental 模式，只会对新增书籍进行跨书对比更新，
     不会重跑全部已处理书籍。
 """
+
 import os
 import sys
 import argparse
@@ -64,7 +65,7 @@ def run_stage_l():
         "信息管理",
         "伏笔设计",
     ]
-    
+
     # 动态过滤：只处理知识库中有足够数据的维度
     comparison_dimensions = []
     for dimension in all_dimensions:
@@ -75,7 +76,7 @@ def run_stage_l():
             print(f"   ✅ 维度 '{dimension}': {data_count} 条数据")
         else:
             print(f"   ⏭️  跳过维度 '{dimension}': 数据不足 ({data_count} 条)")
-    
+
     if not comparison_dimensions:
         print("⚠️ 没有足够数据进行跨书对比，跳过 Stage L")
         return 0, 0
@@ -96,7 +97,9 @@ def run_stage_l():
             logger.error(f"❌ Stage L 对比分析失败 ({dimension}): {exc}")
             total_fail += 1
 
-    print(f"\n📊 Stage L 完成: 成功 {total_success}/{len(comparison_dimensions)}, 失败 {total_fail}")
+    print(
+        f"\n📊 Stage L 完成: 成功 {total_success}/{len(comparison_dimensions)}, 失败 {total_fail}"
+    )
     return total_success, total_fail
 
 
@@ -119,7 +122,9 @@ def run_stage_m():
 
         if mistakes_count == 0:
             print("   ⚠️ 未提取到错误模式，可能是评审历史数据不足")
-            print("   💡 建议：先通过 /api/kb/review 接口评审几章正文，积累评审数据后再运行")
+            print(
+                "   💡 建议：先通过 /api/kb/review 接口评审几章正文，积累评审数据后再运行"
+            )
 
         return mistakes_count, 0
     except Exception as exc:
@@ -149,86 +154,16 @@ def run_stage_n():
         return 0, 1
 
 
-def run_genre_rules_aggregation():
-    """题材裁决规则聚合：从 Stage B 的 genre_specific_techniques 统计各题材的技法频率和优先级"""
-    import json
-    from datetime import datetime
-    from core.utils import generate_id
-
-    print("\n" + "=" * 50)
-    print("📊 题材裁决规则聚合")
-    print("=" * 50)
-
-    db = get_db_manager()
-    cursor = db.connect().cursor()
-
-    try:
-        # 按题材+技法名分组统计频率
-        cursor.execute("""
-            SELECT genre_tag, technique_name, COUNT(*) as freq,
-                   GROUP_CONCAT(DISTINCT book_name) as books,
-                   GROUP_CONCAT(DISTINCT applicable_scenarios) as scenarios
-            FROM genre_specific_techniques
-            GROUP BY genre_tag, technique_name
-            ORDER BY genre_tag, freq DESC
-        """)
-        rows = cursor.fetchall()
-
-        if not rows:
-            print("   ⚠️ genre_specific_techniques 表中无数据，跳过聚合")
-            return 0, 0
-
-        # 按题材分组并排名
-        genre_techniques = {}
-        for genre, technique, freq, books, scenarios in rows:
-            if genre not in genre_techniques:
-                genre_techniques[genre] = []
-            genre_techniques[genre].append({
-                "technique": technique,
-                "frequency": freq,
-                "books": books or "",
-                "scenarios": scenarios or "",
-            })
-
-        # 写入 genre_rules 表（带优先级排名）
-        count = 0
-        for genre, techniques in genre_techniques.items():
-            for rank, item in enumerate(techniques, 1):
-                rule_id = generate_id(genre, item["technique"])
-                cursor.execute(
-                    "INSERT OR REPLACE INTO genre_rules VALUES (?,?,?,?,?,?,?,?)",
-                    (
-                        rule_id,
-                        genre,
-                        item["technique"],
-                        item["frequency"],
-                        rank,
-                        item["scenarios"],
-                        item["books"],
-                        datetime.now().isoformat(),
-                    ),
-                )
-                count += 1
-
-        db.commit()
-        print(f"   ✅ 聚合了 {len(genre_techniques)} 个题材，{count} 条技法排名规则")
-        return count, 0
-
-    except Exception as exc:
-        logger.error(f"❌ 题材裁决规则聚合失败: {exc}")
-        return 0, 1
-
-
 def main():
     parser = argparse.ArgumentParser(description="高级功能 Stage 独立执行脚本")
     parser.add_argument(
         "--only",
-        choices=["L", "M", "N", "GR"],
+        choices=["L", "M", "N"],
         help="只执行指定的 Stage（GR=题材裁决规则聚合）",
     )
     parser.add_argument(
         "--skip",
-        choices=["L", "M", "N", "GR"],
+        choices=["L", "M", "N"],
         help="跳过指定的 Stage",
     )
     parser.add_argument(
@@ -258,7 +193,9 @@ def main():
     book_count = cursor.fetchone()[0]
 
     if book_count < 2:
-        print(f"⚠️ 知识库中只有 {book_count} 本书，跨书对比分析（Stage L）和技法组合（Stage N）需要至少 2 本书的数据")
+        print(
+            f"⚠️ 知识库中只有 {book_count} 本书，跨书对比分析（Stage L）和技法组合（Stage N）需要至少 2 本书的数据"
+        )
         print("💡 建议：先用 novel_analyzer.py 处理多本书后再运行此脚本")
         if args.only in ["L", "N"]:
             return
@@ -272,15 +209,19 @@ def main():
 
     if args.incremental:
         if new_books_since_last <= 0:
-            print(f"✅ 没有新增书籍（上次运行后知识库已有 {last_advanced_run} 本，当前 {book_count} 本），无需增量更新")
+            print(
+                f"✅ 没有新增书籍（上次运行后知识库已有 {last_advanced_run} 本，当前 {book_count} 本），无需增量更新"
+            )
             return
         print(f"📈 增量模式：自上次运行后新增 {new_books_since_last} 本书")
     elif new_books_since_last > 0:
-        print(f"📈 提示：自上次高级分析后新增 {new_books_since_last} 本书，建议使用 --incremental 模式")
+        print(
+            f"📈 提示：自上次高级分析后新增 {new_books_since_last} 本书，建议使用 --incremental 模式"
+        )
 
     print("🚀 开始执行高级功能 Stage...\n")
 
-    stages_to_run = ["L", "M", "N", "GR"]
+    stages_to_run = ["L", "M", "N"]
     if args.only:
         stages_to_run = [args.only]
     if args.skip:
@@ -298,7 +239,7 @@ def main():
         results["N"] = run_stage_n()
 
     if "GR" in stages_to_run:
-        results["GR"] = run_genre_rules_aggregation()
+        print("   ⚠️ GR stage removed (genre_specific_techniques deleted)")
 
     # 汇总报告
     print("\n" + "=" * 50)

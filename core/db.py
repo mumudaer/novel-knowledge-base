@@ -132,7 +132,6 @@ class DatabaseManager:
         
         # 质量自检记录（Stage Q）
         "quality_checks": "(id TEXT PRIMARY KEY, book_name TEXT, stage TEXT, chapter_id TEXT, severity TEXT, description TEXT, suggestion TEXT, detail_json TEXT, checked_at TEXT)",
-        # book_structure": " (id TEXT PRIMARY KEY, book_name TEXT, act_breakdown_json TEXT, surface_theme TEXT, deep_theme TEXT)
     }
 
     CHAPTER_ID_TABLES = ["skills", "plot_arcs", "sensory_mappings", "dialogue_samples", "description_samples", "chapter_functions"]

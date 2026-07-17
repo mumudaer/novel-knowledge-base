@@ -191,7 +191,6 @@ class StageE(BaseStage):
                                 "payoff_timing": fs.get("payoff_timing", ""),
                                 "scope_type": fs.get("scope_type", ""),
                                 "resolved_chapter": f"{start_chap}-{end_chap}" if status == "resolved" else "",
-                                "resolution_excerpt": fs.get("resolution_excerpt", ""),
                                 "last_advanced_chapter": f"{start_chap}-{end_chap}" if status == "advancing" else "",
                             })
 
