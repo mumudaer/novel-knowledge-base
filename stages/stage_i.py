@@ -86,10 +86,6 @@ class StageI(BaseStage):
         medium_para_ratio = round(medium_para_count / total_paras, 4) if total_paras > 0 else 0.0
         long_para_ratio = round(long_para_count / total_paras, 4) if total_paras > 0 else 0.0
 
-        # 节奏模式分析
-        rhythm_pattern = self._analyze_rhythm_pattern(
-            short_para_ratio, medium_para_ratio, long_para_ratio, dialogue_ratio
-        )
 
         result["book_statistics"].append({
             "book_name": self.book_name,
@@ -104,7 +100,7 @@ class StageI(BaseStage):
             "short_para_ratio": short_para_ratio,
             "medium_para_ratio": medium_para_ratio,
             "long_para_ratio": long_para_ratio,
-            "rhythm_pattern": rhythm_pattern,
+            
         })
 
         logger.info(
@@ -112,37 +108,9 @@ class StageI(BaseStage):
             f"平均章节字数: {avg_chapter_words} | "
             f"对话占比: {dialogue_ratio:.2%} | "
             f"段落平均长度: {avg_paragraph_length} | "
-            f"节奏模式: {rhythm_pattern}"
+
         )
         return result
-
-    def _analyze_rhythm_pattern(
-        self,
-        short_ratio: float,
-        medium_ratio: float,
-        long_ratio: float,
-        dialogue_ratio: float,
-    ) -> str:
-        """分析节奏模式"""
-        patterns = []
-
-        # 段落长度模式
-        if short_ratio > 0.5:
-            patterns.append("短句密集（快节奏）")
-        elif long_ratio > 0.5:
-            patterns.append("长句为主（慢节奏）")
-        else:
-            patterns.append("长短交替（均衡节奏）")
-
-        # 对话密度模式
-        if dialogue_ratio > 0.4:
-            patterns.append("对话驱动型")
-        elif dialogue_ratio < 0.2:
-            patterns.append("叙述驱动型")
-        else:
-            patterns.append("对话与叙述均衡")
-
-        return "；".join(patterns)
 
     def insert(self, results: Dict[str, List[Dict]]) -> Dict[str, int]:
         """将 Stage I 结果写入数据库"""
@@ -152,7 +120,7 @@ class StageI(BaseStage):
         for bs in results.get("book_statistics", []):
             bs_id = generate_id(bs["book_name"], "statistics")
             cursor.execute(
-                "INSERT OR REPLACE INTO book_statistics VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO book_statistics VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     bs_id, bs["book_name"],
                     bs["total_words"], bs["avg_chapter_words"],
@@ -161,7 +129,7 @@ class StageI(BaseStage):
                     bs["dialogue_ratio"], bs["description_ratio"],
                     bs["avg_paragraph_length"],
                     bs["short_para_ratio"], bs["medium_para_ratio"],
-                    bs["long_para_ratio"], bs["rhythm_pattern"],
+                    bs["long_para_ratio"],
                 ),
             )
             stats["book_statistics"] += 1

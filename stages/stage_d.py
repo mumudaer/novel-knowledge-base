@@ -132,16 +132,7 @@ class StageD(BaseStage):
                                 "module": ws.get("module", "未知"),
                                 "entity": ws.get("entity", "未知"),
                                 "content": ws.get("content"),
-                                "tags": ws.get("tags", []),
-                                "daily_life": ws.get("daily_life", ""),
-                                "taboos": ws.get("taboos", ""),
-                                "conflict_roots": ws.get("conflict_roots", ""),
-                                "geography": ws.get("geography", ""),
-                                "economy": ws.get("economy", ""),
-                                "culture": ws.get("culture", ""),
-                                "causal_chain": ws.get("causal_chain", ""),
-                                "rules_exceptions": ws.get("rules_exceptions", ""),
-                            }
+                                "tags": ws.get("tags", []),                            }
                         )
 
                 for wt in data.get("world_timeline", []):
@@ -323,9 +314,7 @@ class StageD(BaseStage):
 请输出纯 JSON 格式：
 {{
   "relations_to_others": "与其他重要配角的社会与情感羁绊(100字内，无则留空)",
-  "relationship_evolution": "人物关系动态演变(100字内，无则留空)",
-  "arc_trajectory": "人物弧光轨迹(起点→转折→终点，50字内，无则留空)",
-  "internal_dilemma": "内心两难困境(两个互斥的选择及其代价，50字内，无则留空)",
+  "relationship_evolution": "人物关系动态演变(100字内，无则留空)",  "internal_dilemma": "内心两难困境(两个互斥的选择及其代价，50字内，无则留空)",
   "transformation_trigger": "转变触发器(什么事件触发了人物转变，50字内，无则留空)",
   "contrast_design": "对比设计(与同类型角色的差异设计，50字内，无则留空)",
 }}
@@ -335,18 +324,9 @@ class StageD(BaseStage):
         if not data:
             return
         for chap in chapters:
-            chap["fatal_flaw"] = data.get("fatal_flaw", "")
             chap["relations_to_others"] = data.get("relations_to_others", "")
-            chap["desire_vs_need"] = data.get("desire_vs_need", "")
-            chap["secrets"] = data.get("secrets", "")
-            chap["fears"] = data.get("fears", "")
-            chap["social_masks"] = data.get("social_masks", "")
-            chap["growth_cost"] = data.get("growth_cost", "")
             chap["relationship_evolution"] = data.get("relationship_evolution", "")
-            chap["arc_trajectory"] = data.get("arc_trajectory", "")
             chap["internal_dilemma"] = data.get("internal_dilemma", "")
-            chap["decision_pattern"] = data.get("decision_pattern", "")
-            chap["cognitive_bias"] = data.get("cognitive_bias", "")
             chap["transformation_trigger"] = data.get("transformation_trigger", "")
             chap["contrast_design"] = data.get("contrast_design", "")
                         

@@ -48,7 +48,6 @@ _OLD_ALLOWED_TABLES = {
     # Stage O: 事件因果图谱
     "story_events", "event_causal_edges",
     # 后处理聚合
-    "genre_rules",
 }
 
 # 字段名白名单，防止 SQL 注入（仅允许字母、数字、下划线）

@@ -72,7 +72,7 @@ class DatabaseManager:
         "show_tell_patterns": "(id TEXT PRIMARY KEY, book_name TEXT, chapter_id TEXT, pattern_type TEXT, switching_triggers TEXT, original_example TEXT, writing_quality INTEGER DEFAULT 5)",
         
         # Stage I: 纯统计模块
-        "book_statistics": "(id TEXT PRIMARY KEY, book_name TEXT, total_words INTEGER, avg_chapter_words INTEGER, min_chapter_words INTEGER, max_chapter_words INTEGER, median_chapter_words INTEGER, dialogue_ratio REAL, description_ratio REAL, avg_paragraph_length REAL, short_para_ratio REAL, medium_para_ratio REAL, long_para_ratio REAL, rhythm_pattern TEXT)",
+        "book_statistics": "(id TEXT PRIMARY KEY, book_name TEXT, total_words INTEGER, avg_chapter_words INTEGER, min_chapter_words INTEGER, max_chapter_words INTEGER, median_chapter_words INTEGER, dialogue_ratio REAL, description_ratio REAL, avg_paragraph_length REAL, short_para_ratio REAL, medium_para_ratio REAL, long_para_ratio REAL)",
         
         # ===== 通用类型补强 =====
         # 感情线追踪（言情/爱情/所有有CP的作品）

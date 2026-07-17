@@ -124,7 +124,7 @@ def search_character(
         "personality", "relation_to_mc",
         "relations_to_others", "climax_or_fate", "background",
                 "speech_samples", "behavior_samples",
-        "relationship_evolution", "abilities", "arc_trajectory", "internal_dilemma",
+        "relationship_evolution", "abilities", "internal_dilemma",
         "transformation_trigger", "contrast_design",
     ]
     
