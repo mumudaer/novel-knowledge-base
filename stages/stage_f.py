@@ -8,6 +8,7 @@ import os
 import re
 import math
 import logging
+import unicodedata
 import os
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,7 +27,10 @@ from config.settings import (
 
 logger = logging.getLogger(__name__)
 
-_DIALOGUE_RE = re.compile(r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]', re.DOTALL)
+_DIALOGUE_RE = re.compile(
+    r'[""\u201c\u201d\u300c\u300e\u0022](.*?)[""\u201d\u201c\u300d\u300f\u0022]',
+    re.DOTALL,
+)
 
 
 class StageF(BaseStage):
@@ -357,7 +361,21 @@ class StageF(BaseStage):
                         )
                         # 验证：金句必须在原文中存在
                         quote_text_val = quote.get("quote_text", "")
-                        if quote_text_val and quote_text_val not in text:
+
+                        # 规范化比较：去空格、统一全半角、去换行
+                        def _norm(s):
+                            t = (
+                                s.strip()
+                                .replace(" ", "")
+                                .replace("\u3000", "")
+                                .replace("\n", "")
+                                .replace("\r", "")
+                            )
+                            return unicodedata.normalize("NFKC", t)
+
+                        quote_norm = _norm(quote_text_val)
+                        text_norm = _norm(text)
+                        if quote_text_val and quote_norm not in text_norm:
                             logger.warning(
                                 f"⚠️ [阶段F] 章节{chap_id}金句未在原文中找到，可能编造: {quote_text_val[:30]}..."
                             )

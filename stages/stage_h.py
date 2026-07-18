@@ -126,11 +126,14 @@ class StageH(BaseStage):
                 if data:
                     pl = data.get("plot_lines", [])
                     if pl:
-                        result["plot_lines"] = [{"book_name": self.book_name, **p} for p in pl]
+                        result["plot_lines"] = [
+                            {"book_name": self.book_name, **p} for p in pl
+                        ]
             except Exception as e:
                 logger.warning(f"⚠️ [阶段H] plot_lines提取失败: {{e}}")
             groups_done.add("structure")
             self.save_cache({"groups_done": list(groups_done), "result": result})
+            structure_data = {"plot_lines": result.get("plot_lines", [])}
         else:
             logger.info("✅ [阶段H] 结构组已完成，跳过")
             cached_result = cache.get("result", {})
@@ -158,9 +161,6 @@ class StageH(BaseStage):
             self.save_cache({"groups_done": list(groups_done), "result": result})
         else:
             logger.info("✅ [阶段H] 技法组已完成，跳过")
-        technique_context = self._build_group_context(
-            {k: result.get(k, []) for k in tk}
-        )
         # 第三组：类型组全部子表已废弃，跳过
 
         logger.info(
