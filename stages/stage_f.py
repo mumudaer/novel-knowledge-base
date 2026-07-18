@@ -362,20 +362,21 @@ class StageF(BaseStage):
                         # 验证：金句必须在原文中存在
                         quote_text_val = quote.get("quote_text", "")
 
-                        # 规范化比较：去空格、统一全半角、去换行
+                        # 规范化 + 弹性匹配：去空格、统一全半角
                         def _norm(s):
-                            t = (
-                                s.strip()
-                                .replace(" ", "")
-                                .replace("\u3000", "")
-                                .replace("\n", "")
-                                .replace("\r", "")
-                            )
+                            t = (s.strip()
+                                 .replace(" ", "").replace("\u3000", "")
+                                 .replace("\n", "").replace("\r", ""))
                             return unicodedata.normalize("NFKC", t)
 
                         quote_norm = _norm(quote_text_val)
                         text_norm = _norm(text)
-                        if quote_text_val and quote_norm not in text_norm:
+                        found = quote_norm in text_norm
+                        if not found and "..." in quote_norm:
+                            # 以 ... 拆分为片段，每个片段都存在于原文中
+                            parts = [p for p in quote_norm.split("...") if len(p) >= 4]
+                            found = all(p in text_norm for p in parts)
+                        if quote_text_val and not found:
                             logger.warning(
                                 f"⚠️ [阶段F] 章节{chap_id}金句未在原文中找到，可能编造: {quote_text_val[:30]}..."
                             )
