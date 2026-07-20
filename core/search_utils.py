@@ -16,43 +16,9 @@ def _get_allowed_tables():
     return set(DatabaseManager.TABLE_SCHEMAS.keys())
 ALLOWED_TABLES = _get_allowed_tables()
 # (was hardcoded, now auto-generated from TABLE_SCHEMAS)
-_OLD_ALLOWED_TABLES = {
-    # Stage A
-    "plot_arcs",
-    # Stage B
-    "skills",
-    # Stage C
-    "author_fingerprints", "sensory_mappings",
-    # Stage D
-    "world_settings", "character_profiles", "world_timeline", "golden_finger",
-    "faction_networks", "setting_evolutions",
-    # Stage E
-    "macro_outlines", "plot_foreshadowing", "entity_state_tracker", "chapter_functions",
-    # Stage F
-    "dialogue_samples", "description_samples", "transition_samples", "style_summaries",
-    "action_scene_samples", "climax_excerpts", "memorable_quotes",
-    "chapter_opening_ending_samples", "narrative_distance", "show_tell_patterns",
-    # Stage G
-    "character_speech_style", "character_behavior_marks", "character_relationship_dynamics",
-    # Stage H
-    "plot_lines", "revelation_pacing",
-    "emotion_transition_patterns", "information_management",
-    "climax_buildup_chains", "conflict_escalation",
-    # Stage I
-    "book_statistics",
-    # 通用类型补强
-    # 高级功能
-    "cross_book_comparisons", "common_mistakes", "technique_combinations",
-    # 元数据与服务层
-    "book_metadata", "chapter_reviews", "kb_references", "search_logs", "quality_checks",
-    # Stage O: 事件因果图谱
-    "story_events", "event_causal_edges",
-    # 后处理聚合
-}
 
 # 字段名白名单，防止 SQL 注入（仅允许字母、数字、下划线）
 _FIELD_NAME_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
-
 
 def hybrid_search(
     table: str,

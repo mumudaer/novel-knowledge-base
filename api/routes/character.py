@@ -102,7 +102,7 @@ def get_behavior_marks(
     
     results = hybrid_search(
         table="character_behavior_marks",
-        collection="character_behavior_marks_kb",
+        collection="character_behavior_kb",
         columns=columns,
         query=None,
         filters=filters,
