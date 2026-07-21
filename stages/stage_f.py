@@ -361,25 +361,11 @@ class StageF(BaseStage):
                         )
                         # 验证：金句必须在原文中存在
                         quote_text_val = quote.get("quote_text", "")
-
-                        # 规范化 + 弹性匹配：去空格、统一全半角
-                        def _norm(s):
-                            t = (s.strip()
-                                 .replace(" ", "").replace("\u3000", "")
-                                 .replace("\n", "").replace("\r", ""))
-                            return unicodedata.normalize("NFKC", t)
-
-                        quote_norm = _norm(quote_text_val)
-                        text_norm = _norm(text)
-                        found = quote_norm in text_norm
-                        if not found and "..." in quote_norm:
-                            # 以 ... 拆分为片段，每个片段都存在于原文中
-                            parts = [p for p in quote_norm.split("...") if len(p) >= 4]
-                            found = all(p in text_norm for p in parts)
-                        if quote_text_val and not found:
-                            logger.warning(
-                                f"⚠️ [阶段F] 章节{chap_id}金句未在原文中找到，可能编造: {quote_text_val[:30]}..."
-                            )
+                        # 简化的存在性检测（NFKC + 去空格，跳过过短片段）
+                        tq = unicodedata.normalize("NFKC", quote_text_val.strip().replace(" ", "").replace("\n", ""))
+                        tt = unicodedata.normalize("NFKC", text.strip().replace(" ", "").replace("\n", ""))
+                        if len(tq) >= 8 and tq not in tt:
+                            result.setdefault("_unverified_quotes", []).append(chap_id)
         except Exception as e:
             logger.warning(f"⚠️ [阶段F-进阶样本] 解析章节 {chap_id} 失败: {e}")
             if stage_result:
@@ -1110,6 +1096,15 @@ class StageF(BaseStage):
             )
         if q_ids:
             self.chroma.upsert_batch("memorable_quotes_kb", q_ids, q_docs, q_metas)
+
+        # 金句验证汇总
+        unverified = results.get("_unverified_quotes", [])
+        total_quotes = len(results.get("memorable_quotes", []))
+        if unverified:
+            logger.warning(
+                f"📊 [阶段F] 金句抽查: {len(unverified)}/{total_quotes} 条未在原文匹配 "
+                f"({len(unverified)*100//max(total_quotes,1)}%), 章节: {unverified[:5]}..."
+            )
 
         self.db.commit()
         logger.info(
