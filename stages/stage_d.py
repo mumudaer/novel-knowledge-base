@@ -238,7 +238,7 @@ class StageD(BaseStage):
                                 "role_type": cp.get("role_type", "未知"),
                                 "appearance": cp.get("appearance", ""),
                                 "quirks": cp.get("quirks", ""),
-                                "identity": cp.get("identity", ""),
+                                "identity": json.dumps(cp.get("identity", ""), ensure_ascii=False) if isinstance(cp.get("identity", ""), list) else cp.get("identity", ""),
                                 "motivation": cp.get("motivation", ""),
                                 "internal_conflict": cp.get("internal_conflict", ""),
                                 "personality": cp.get("personality", ""),
