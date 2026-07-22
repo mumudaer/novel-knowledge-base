@@ -3,6 +3,7 @@
 为 Reasonix 创作 skill 提供多维度知识库搜索/检索接口
 覆盖：世界观/人物档案/写作风格/大纲结构/正文样本 等创作维度
 """
+
 import json
 import uuid
 from datetime import datetime
@@ -20,6 +21,7 @@ router = APIRouter()
 
 # ===================== Pydantic 模型 =====================
 
+
 class ComprehensiveSearchRequest(BaseModel):
     text: str = Field(..., description="用户创作内容文本（如世界观设定、人物描述等）")
     dimensions: List[str] = Field(
@@ -32,8 +34,12 @@ class ComprehensiveSearchRequest(BaseModel):
 class ReviewRequest(BaseModel):
     chapter_text: str = Field(..., description="待评审的章节正文")
     chapter_index: int = Field(default=1, description="章节序号")
-    project_name: str = Field(default="default", description="项目标识（用于区分不同创作项目）")
-    benchmark_books: Optional[List[str]] = Field(default=None, description="标杆作品书名列表")
+    project_name: str = Field(
+        default="default", description="项目标识（用于区分不同创作项目）"
+    )
+    benchmark_books: Optional[List[str]] = Field(
+        default=None, description="标杆作品书名列表"
+    )
 
 
 class RecommendRequest(BaseModel):
@@ -47,25 +53,35 @@ class RecommendRequest(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    dimension: str = Field(..., description="对比维度（如：感情线设计/反派塑造/力量体系）")
-    book_names: Optional[List[str]] = Field(default=None, description="参与对比的书名列表，为空则使用全部标杆书")
+    dimension: str = Field(
+        ..., description="对比维度（如：感情线设计/反派塑造/力量体系）"
+    )
+    book_names: Optional[List[str]] = Field(
+        default=None, description="参与对比的书名列表，为空则使用全部标杆书"
+    )
     category: Optional[str] = Field(default=None, description="限定分类")
 
 
 class ContextPushRequest(BaseModel):
     context_text: str = Field(..., description="当前创作上下文文本")
-    creation_stage: Optional[str] = Field(default=None, description="创作阶段（如：大纲/人物设计/正文写作）")
+    creation_stage: Optional[str] = Field(
+        default=None, description="创作阶段（如：大纲/人物设计/正文写作）"
+    )
     genre: Optional[str] = Field(default=None, description="题材/类型")
     project_name: str = Field(default="default", description="项目标识")
 
 
-
 # ===================== 世界观搜索 =====================
+
 
 @router.get("/search/world")
 def search_world(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：玄幻力量体系设计）"),
-    module: Optional[str] = Query(None, description="设定模块过滤（如：力量体系/社会阶层/地理空间）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：玄幻力量体系设计）"
+    ),
+    module: Optional[str] = Query(
+        None, description="设定模块过滤（如：力量体系/社会阶层/地理空间）"
+    ),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -75,15 +91,23 @@ def search_world(
     向量召回优先 + SQL 精确过滤补充 + 去重合并。
     适用场景：创作世界观时，搜索标杆作品的力量体系/社会结构/地理设定等。
     """
-    columns = ["id", "book_name", "author", "category", "module", "entity",
-               "content", "tags",                ]
-    
+    columns = [
+        "id",
+        "book_name",
+        "author",
+        "category",
+        "module",
+        "entity",
+        "content",
+        "tags",
+    ]
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
     if module:
         filters["module"] = module
-    
+
     results = hybrid_search(
         table="world_settings",
         collection="world_settings_kb",
@@ -104,10 +128,15 @@ def search_world(
 
 # ===================== 人物档案搜索 =====================
 
+
 @router.get("/search/character")
 def search_character(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：反派设计/导师型角色）"),
-    role_type: Optional[str] = Query(None, description="角色定位过滤（主角/反派/导师/配角）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：反派设计/导师型角色）"
+    ),
+    role_type: Optional[str] = Query(
+        None, description="角色定位过滤（主角/反派/导师/配角）"
+    ),
     character_name: Optional[str] = Query(None, description="人物名模糊匹配"),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
@@ -119,15 +148,31 @@ def search_character(
     适用场景：创作人物档案时，搜索标杆作品的同类角色设计。
     """
     columns = [
-        "id", "book_name", "author", "category", "name", "role_type",
-        "appearance", "quirks", "identity", "motivation", "internal_conflict",
-        "personality", "relation_to_mc",
-        "relations_to_others", "climax_or_fate", "background",
-                "speech_samples", "behavior_samples",
-        "relationship_evolution", "abilities", "internal_dilemma",
-        "transformation_trigger", "contrast_design",
+        "id",
+        "book_name",
+        "author",
+        "category",
+        "name",
+        "role_type",
+        "appearance",
+        "quirks",
+        "identity",
+        "motivation",
+        "internal_conflict",
+        "personality",
+        "relation_to_mc",
+        "relations_to_others",
+        "climax_or_fate",
+        "background",
+        "speech_samples",
+        "behavior_samples",
+        "relationship_evolution",
+        "abilities",
+        "internal_dilemma",
+        "transformation_trigger",
+        "contrast_design",
     ]
-    
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
@@ -135,7 +180,7 @@ def search_character(
         filters["role_type"] = role_type
     if character_name:
         filters["name"] = character_name
-    
+
     results = hybrid_search(
         table="character_profiles",
         collection="character_profiles_kb",
@@ -156,24 +201,31 @@ def search_character(
 
 # ===================== 写作风格搜索 =====================
 
+
 @router.get("/search/style")
 
 
 # ===================== 大纲/结构搜索 =====================
+
 
 @router.get("/search/plot")
 
 
 # ===================== 正文样本搜索 =====================
 
+
 @router.get("/search/excerpt")
 def search_excerpt(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：打脸高潮点写法/告白场景对话）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：打脸高潮点写法/告白场景对话）"
+    ),
     sample_type: Optional[str] = Query(
         None,
         description="样本类型过滤（dialogue/description/transition）",
     ),
-    scene_type: Optional[str] = Query(None, description="场景类型过滤（争吵/告白/打斗/环境）"),
+    scene_type: Optional[str] = Query(
+        None, description="场景类型过滤（争吵/告白/打斗/环境）"
+    ),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -200,8 +252,16 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "scene_type",
-                "original_text", "emotional_tension", "subtext", "plot_function"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "scene_type",
+            "original_text",
+            "emotional_tension",
+            "subtext",
+            "plot_function",
+        ]
         result_sections["dialogue_samples"] = [dict(zip(cols, r)) for r in rows]
 
     # 描写样本
@@ -217,8 +277,15 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "description_type",
-                "original_text", "technique_analysis", "sensory_details"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "description_type",
+            "original_text",
+            "technique_analysis",
+            "sensory_details",
+        ]
         result_sections["description_samples"] = [dict(zip(cols, r)) for r in rows]
 
     # 转场样本
@@ -231,8 +298,14 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "transition_type",
-                "original_text", "technique_analysis"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "transition_type",
+            "original_text",
+            "technique_analysis",
+        ]
         result_sections["transition_samples"] = [dict(zip(cols, r)) for r in rows]
 
     # 动作/战斗场景范文
@@ -248,8 +321,16 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "action_type",
-                "original_text", "technique_analysis", "pacing_analysis", "sensory_details"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "action_type",
+            "original_text",
+            "technique_analysis",
+            "pacing_analysis",
+            "sensory_details",
+        ]
         result_sections["action_scene_samples"] = [dict(zip(cols, r)) for r in rows]
 
     # 高潮段落/名场面原文
@@ -265,8 +346,15 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "excerpt_type",
-                "original_text", "technique_analysis", "emotional_impact"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "excerpt_type",
+            "original_text",
+            "technique_analysis",
+            "emotional_impact",
+        ]
         result_sections["climax_excerpts"] = [dict(zip(cols, r)) for r in rows]
 
     # 章节开头/结尾范文
@@ -279,9 +367,18 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "sample_position",
-                "original_text", "technique_analysis", "hook_type"]
-        result_sections["chapter_opening_ending_samples"] = [dict(zip(cols, r)) for r in rows]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "sample_position",
+            "original_text",
+            "technique_analysis",
+            "hook_type",
+        ]
+        result_sections["chapter_opening_ending_samples"] = [
+            dict(zip(cols, r)) for r in rows
+        ]
 
     # 金句/名句
     if not sample_type or sample_type == "quotes":
@@ -296,8 +393,15 @@ def search_excerpt(
         sql += f" LIMIT {limit}"
         cursor.execute(sql, params)
         rows = cursor.fetchall()
-        cols = ["id", "book_name", "chapter_id", "quote_text",
-                "context", "technique_analysis", "quote_type"]
+        cols = [
+            "id",
+            "book_name",
+            "chapter_id",
+            "quote_text",
+            "context",
+            "technique_analysis",
+            "quote_type",
+        ]
         result_sections["memorable_quotes"] = [dict(zip(cols, r)) for r in rows]
 
     # 语义搜索
@@ -305,7 +409,14 @@ def search_excerpt(
     if query:
         chroma = get_chroma_manager()
         where_filter = {"book_name": book_name} if book_name else None
-        for collection_name in ["dialogue_samples_kb", "description_samples_kb", "transition_samples_kb", "action_scene_samples_kb", "climax_excerpts_kb", "memorable_quotes_kb"]:
+        for collection_name in [
+            "dialogue_samples_kb",
+            "description_samples_kb",
+            "transition_samples_kb",
+            "action_scene_samples_kb",
+            "climax_excerpts_kb",
+            "memorable_quotes_kb",
+        ]:
             chroma_res = chroma.query(
                 collection_name,
                 query_texts=[query],
@@ -314,12 +425,22 @@ def search_excerpt(
             )
             if chroma_res and chroma_res.get("ids"):
                 for i, doc_id in enumerate(chroma_res["ids"][0]):
-                    semantic_results.append({
-                        "id": doc_id,
-                        "source": collection_name,
-                        "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                        "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                    })
+                    semantic_results.append(
+                        {
+                            "id": doc_id,
+                            "source": collection_name,
+                            "text": (
+                                chroma_res["documents"][0][i]
+                                if chroma_res.get("documents")
+                                else ""
+                            ),
+                            "metadata": (
+                                chroma_res["metadatas"][0][i]
+                                if chroma_res.get("metadatas")
+                                else {}
+                            ),
+                        }
+                    )
 
     total = sum(len(v) for v in result_sections.values()) + len(semantic_results)
     _log_search("default", "excerpt", query or sample_type or "", total)
@@ -336,15 +457,18 @@ def search_excerpt(
 
 # ===================== 综合语义搜索 =====================
 
+
 @router.post("/search/comprehensive")
 
 
 # ===================== 按书名检索全部知识 =====================
 
+
 @router.get("/search/by-book")
 
 
 # ===================== 正文质量评审 =====================
+
 
 @router.post("/review")
 def review_chapter(req: ReviewRequest):
@@ -355,6 +479,7 @@ def review_chapter(req: ReviewRequest):
     与知识库标杆作品对标分析，输出打分+问题标记+修改建议+改写示范。
     """
     from stages.stage_j import StageJ
+
     stage = StageJ()
     result = stage.run(
         chapter_text=req.chapter_text,
@@ -378,20 +503,37 @@ def get_review_result(project_name: str, chapter_index: int):
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="评审结果不存在")
-    columns = ["id", "project_name", "chapter_index", "overall_score",
-                "dimension_scores_json", "issues_json", "suggestions_json",
-                "rewrite_samples_json", "benchmark_books", "reviewed_at"]
+    columns = [
+        "id",
+        "project_name",
+        "chapter_index",
+        "overall_score",
+        "dimension_scores_json",
+        "issues_json",
+        "suggestions_json",
+        "rewrite_samples_json",
+        "benchmark_books",
+        "reviewed_at",
+    ]
     item = dict(zip(columns, row))
-    for json_field in ["dimension_scores_json", "issues_json", "suggestions_json", "rewrite_samples_json"]:
+    for json_field in [
+        "dimension_scores_json",
+        "issues_json",
+        "suggestions_json",
+        "rewrite_samples_json",
+    ]:
         key = json_field.replace("_json", "")
         try:
-            item[key] = json.loads(item.get(json_field, "{}" if "scores" in json_field else "[]"))
+            item[key] = json.loads(
+                item.get(json_field, "{}" if "scores" in json_field else "[]")
+            )
         except Exception:
             item[key] = {} if "scores" in json_field else []
     return {"success": True, "data": item}
 
 
 # ===================== 知识库引用推荐 =====================
+
 
 @router.post("/recommend")
 def recommend_references(req: RecommendRequest):
@@ -402,6 +544,7 @@ def recommend_references(req: RecommendRequest):
     按世界观/人物/大纲/风格各维度推荐参考素材。
     """
     from stages.stage_k import StageK
+
     stage = StageK()
     result = stage.run(
         project_name=req.project_name,
@@ -414,6 +557,7 @@ def recommend_references(req: RecommendRequest):
 
 
 # ===================== 知识图谱查询 =====================
+
 
 @router.get("/graph/characters")
 def query_character_graph(
@@ -430,9 +574,9 @@ def query_character_graph(
     try:
         graph_mgr = get_graph_manager()
         graph = graph_mgr.load()
-        
+
         results = []
-        
+
         # 查找匹配的人物节点
         target_nodes = []
         for node_id, attrs in graph.nodes(data=True):
@@ -446,7 +590,7 @@ def query_character_graph(
                             target_nodes.append(node_id)
                     else:
                         target_nodes.append(node_id)
-        
+
         # 对每个目标节点，提取关系网络
         for target_node in target_nodes[:10]:  # 限制返回数量
             node_data = {
@@ -454,11 +598,11 @@ def query_character_graph(
                 "attributes": dict(graph.nodes[target_node]),
                 "relationships": [],
             }
-            
+
             # BFS 提取指定深度的关系
             visited = {target_node}
             current_level = [target_node]
-            
+
             for current_depth in range(depth):
                 next_level = []
                 for node in current_level:
@@ -466,36 +610,40 @@ def query_character_graph(
                     for neighbor in graph.successors(node):
                         if neighbor not in visited:
                             edge_data = graph[node][neighbor]
-                            node_data["relationships"].append({
-                                "source": node,
-                                "target": neighbor,
-                                "direction": "out",
-                                "depth": current_depth + 1,
-                                "attributes": dict(edge_data),
-                            })
+                            node_data["relationships"].append(
+                                {
+                                    "source": node,
+                                    "target": neighbor,
+                                    "direction": "out",
+                                    "depth": current_depth + 1,
+                                    "attributes": dict(edge_data),
+                                }
+                            )
                             visited.add(neighbor)
                             next_level.append(neighbor)
-                    
+
                     # 入边
                     for predecessor in graph.predecessors(node):
                         if predecessor not in visited:
                             edge_data = graph[predecessor][node]
-                            node_data["relationships"].append({
-                                "source": predecessor,
-                                "target": node,
-                                "direction": "in",
-                                "depth": current_depth + 1,
-                                "attributes": dict(edge_data),
-                            })
+                            node_data["relationships"].append(
+                                {
+                                    "source": predecessor,
+                                    "target": node,
+                                    "direction": "in",
+                                    "depth": current_depth + 1,
+                                    "attributes": dict(edge_data),
+                                }
+                            )
                             visited.add(predecessor)
                             next_level.append(predecessor)
-                
+
                 current_level = next_level
                 if not current_level:
                     break
-            
+
             results.append(node_data)
-        
+
         return {
             "success": True,
             "data": {
@@ -524,7 +672,7 @@ def query_chapter_graph(
     try:
         graph_mgr = get_graph_manager()
         graph = graph_mgr.load()
-        
+
         # 解析章节范围
         start_chapter = 1
         end_chapter = 999999
@@ -532,7 +680,7 @@ def query_chapter_graph(
             parts = chapter_range.split("-")
             start_chapter = int(parts[0])
             end_chapter = int(parts[1])
-        
+
         # 查找章节节点
         chapter_nodes = []
         for node_id, attrs in graph.nodes(data=True):
@@ -543,19 +691,21 @@ def query_chapter_graph(
                     chapter_num = attrs.get("chapter_index", 0)
                     if start_chapter <= chapter_num <= end_chapter:
                         chapter_nodes.append(node_id)
-        
+
         # 提取章节间的边
         edges = []
         for node in chapter_nodes:
             for neighbor in graph.successors(node):
                 if neighbor in chapter_nodes:
                     edge_data = graph[node][neighbor]
-                    edges.append({
-                        "source": node,
-                        "target": neighbor,
-                        "attributes": dict(edge_data),
-                    })
-        
+                    edges.append(
+                        {
+                            "source": node,
+                            "target": neighbor,
+                            "attributes": dict(edge_data),
+                        }
+                    )
+
         return {
             "success": True,
             "data": {
@@ -585,17 +735,17 @@ def graph_statistics():
     try:
         graph_mgr = get_graph_manager()
         graph = graph_mgr.load()
-        
+
         # 基础统计
         node_count = graph.number_of_nodes()
         edge_count = graph.number_of_edges()
-        
+
         # 按类型统计节点
         node_types = {}
         for node_id, attrs in graph.nodes(data=True):
             node_type = attrs.get("node_type", "unknown")
             node_types[node_type] = node_types.get(node_type, 0) + 1
-        
+
         # 按书名统计
         book_stats = {}
         for node_id, attrs in graph.nodes(data=True):
@@ -605,11 +755,11 @@ def graph_statistics():
                     book = book.strip()
                     if book:
                         book_stats[book] = book_stats.get(book, 0) + 1
-        
+
         # 连通分量（无向图）
         undirected = graph.to_undirected()
         components = list(nx.connected_components(undirected))
-        
+
         return {
             "success": True,
             "data": {
@@ -618,7 +768,9 @@ def graph_statistics():
                 "node_types": node_types,
                 "books": book_stats,
                 "connected_components": len(components),
-                "largest_component_size": max(len(c) for c in components) if components else 0,
+                "largest_component_size": (
+                    max(len(c) for c in components) if components else 0
+                ),
             },
         }
     except Exception as e:
@@ -632,25 +784,30 @@ def graph_statistics():
 
 # ===================== 感情线搜索 =====================
 
+
 @router.get("/search/romance")
 
 
 # ===================== 线索/推理搜索 =====================
+
 
 @router.get("/search/mystery")
 
 
 # ===================== 升级体系搜索 =====================
 
+
 @router.get("/search/progression")
 
 
 # ===================== 类型技法搜索 =====================
 
+
 @router.get("/search/genre-technique")
 
 
 # ===================== 书籍列表 =====================
+
 
 @router.get("/books")
 def list_books(
@@ -683,14 +840,24 @@ def list_books(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    cols = ["id", "book_name", "author", "category", "genre_tags",
-            "total_chapters", "total_words", "description", "added_at"]
+    cols = [
+        "id",
+        "book_name",
+        "author",
+        "category",
+        "genre_tags",
+        "total_chapters",
+        "total_words",
+        "description",
+        "added_at",
+    ]
     results = [dict(zip(cols, r)) for r in rows]
 
     return {"success": True, "data": results, "total": len(results)}
 
 
 # ===================== 跨书对比分析 =====================
+
 
 @router.post("/compare")
 def cross_book_compare(req: CompareRequest):
@@ -701,6 +868,7 @@ def cross_book_compare(req: CompareRequest):
     适用场景：想了解"顶尖作者们在某个问题上是怎么处理的"。
     """
     from stages.stage_l import StageL
+
     stage = StageL()
     result = stage.run(
         comparison_dimension=req.dimension,
@@ -713,10 +881,13 @@ def cross_book_compare(req: CompareRequest):
 
 # ===================== 常见错误模式查询 =====================
 
+
 @router.get("/mistakes")
 def search_mistakes(
     query: Optional[str] = Query(None, description="语义搜索关键词"),
-    dimension: Optional[str] = Query(None, description="维度过滤（节奏/对话/描写/人物/情节）"),
+    dimension: Optional[str] = Query(
+        None, description="维度过滤（节奏/对话/描写/人物/情节）"
+    ),
     mistake_name: Optional[str] = Query(None, description="错误名称模糊匹配"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -741,29 +912,25 @@ def search_mistakes(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    cols = ["id", "dimension", "mistake_name", "typical_manifestation",
-            "frequency", "correction_direction", "benchmark_example",
-            "benchmark_book", "created_at"]
+    cols = [
+        "id",
+        "dimension",
+        "mistake_name",
+        "typical_manifestation",
+        "frequency",
+        "correction_direction",
+        "benchmark_example",
+        "benchmark_book",
+        "created_at",
+    ]
     results = [dict(zip(cols, r)) for r in rows]
 
-    # 语义搜索
-    semantic_results = []
-    if query:
-        chroma = get_chroma_manager()
-        chroma_res = chroma.query(
-            "common_mistakes_kb",
-            query_texts=[query],
-            n_results=limit,
-        )
-        if chroma_res and chroma_res.get("ids"):
-            for i, doc_id in enumerate(chroma_res["ids"][0]):
-                semantic_results.append({
-                    "id": doc_id,
-                    "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                    "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                })
-
-    _log_search("default", "mistakes", query or dimension or "", len(results) + len(semantic_results))
+    _log_search(
+        "default",
+        "mistakes",
+        query or dimension or "",
+        len(results) + len(semantic_results),
+    )
     return {
         "success": True,
         "data": {
@@ -788,18 +955,18 @@ def _query_table_generic(
     """通用表查询辅助函数"""
     if not search_fields:
         search_fields = columns[1:3]  # 默认搜索第2、3个字段
-    
+
     sql = f"SELECT {', '.join(columns)} FROM {table}"
     params = []
-    
+
     if query_text:
         conditions = [f"{field} LIKE ?" for field in search_fields]
         sql += f" WHERE {' OR '.join(conditions)}"
         params = [f"%{query_text}%"] * len(search_fields)
-    
+
     sql += f" LIMIT {limit}"
     cursor.execute(sql, params)
-    
+
     rows = cursor.fetchall()
     return [dict(zip(columns, row)) for row in rows]
 
@@ -809,10 +976,13 @@ def _query_table_generic(
 
 # ===================== 技法组合模板查询 =====================
 
+
 @router.get("/combos")
 def search_combos(
     query: Optional[str] = Query(None, description="语义搜索关键词"),
-    scene_type: Optional[str] = Query(None, description="场景类型过滤（打斗/对话/描写/高潮/转折/揭秘）"),
+    scene_type: Optional[str] = Query(
+        None, description="场景类型过滤（打斗/对话/描写/高潮/转折/揭秘）"
+    ),
     combo_name: Optional[str] = Query(None, description="组合名称模糊匹配"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -837,9 +1007,18 @@ def search_combos(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    cols = ["id", "scene_type", "combo_name", "technique_sequence_json",
-            "technique_roles_json", "applicable_scenarios", "variations",
-            "benchmark_book", "original_example", "created_at"]
+    cols = [
+        "id",
+        "scene_type",
+        "combo_name",
+        "technique_sequence_json",
+        "technique_roles_json",
+        "applicable_scenarios",
+        "variations",
+        "benchmark_book",
+        "original_example",
+        "created_at",
+    ]
     results = []
     for row in rows:
         item = dict(zip(cols, row))
@@ -862,13 +1041,28 @@ def search_combos(
         )
         if chroma_res and chroma_res.get("ids"):
             for i, doc_id in enumerate(chroma_res["ids"][0]):
-                semantic_results.append({
-                    "id": doc_id,
-                    "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                    "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                })
+                semantic_results.append(
+                    {
+                        "id": doc_id,
+                        "text": (
+                            chroma_res["documents"][0][i]
+                            if chroma_res.get("documents")
+                            else ""
+                        ),
+                        "metadata": (
+                            chroma_res["metadatas"][0][i]
+                            if chroma_res.get("metadatas")
+                            else {}
+                        ),
+                    }
+                )
 
-    _log_search("default", "combos", query or scene_type or "", len(results) + len(semantic_results))
+    _log_search(
+        "default",
+        "combos",
+        query or scene_type or "",
+        len(results) + len(semantic_results),
+    )
     return {
         "success": True,
         "data": {
@@ -881,10 +1075,15 @@ def search_combos(
 
 # ===================== 高潮段落/名场面搜索 =====================
 
+
 @router.get("/search/climax")
 def search_climax(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：决战/揭秘/情感爆发）"),
-    excerpt_type: Optional[str] = Query(None, description="高潮类型过滤（决战/揭秘/情感爆发/逆转/生死抉择）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：决战/揭秘/情感爆发）"
+    ),
+    excerpt_type: Optional[str] = Query(
+        None, description="高潮类型过滤（决战/揭秘/情感爆发/逆转/生死抉择）"
+    ),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -909,8 +1108,15 @@ def search_climax(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    cols = ["id", "book_name", "chapter_id", "excerpt_type",
-            "original_text", "technique_analysis", "emotional_impact"]
+    cols = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "excerpt_type",
+        "original_text",
+        "technique_analysis",
+        "emotional_impact",
+    ]
     results = [dict(zip(cols, r)) for r in rows]
 
     # 语义搜索
@@ -926,13 +1132,28 @@ def search_climax(
         )
         if chroma_res and chroma_res.get("ids"):
             for i, doc_id in enumerate(chroma_res["ids"][0]):
-                semantic_results.append({
-                    "id": doc_id,
-                    "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                    "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                })
+                semantic_results.append(
+                    {
+                        "id": doc_id,
+                        "text": (
+                            chroma_res["documents"][0][i]
+                            if chroma_res.get("documents")
+                            else ""
+                        ),
+                        "metadata": (
+                            chroma_res["metadatas"][0][i]
+                            if chroma_res.get("metadatas")
+                            else {}
+                        ),
+                    }
+                )
 
-    _log_search("default", "climax", query or excerpt_type or "", len(results) + len(semantic_results))
+    _log_search(
+        "default",
+        "climax",
+        query or excerpt_type or "",
+        len(results) + len(semantic_results),
+    )
     return {
         "success": True,
         "data": {
@@ -945,10 +1166,15 @@ def search_climax(
 
 # ===================== 金句/名句搜索 =====================
 
+
 @router.get("/search/quotes")
 def search_quotes(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：哲理句/经典台词/励志金句）"),
-    quote_type: Optional[str] = Query(None, description="金句类型过滤（哲理句/经典台词/情感金句/励志金句/讽刺金句）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：哲理句/经典台词/励志金句）"
+    ),
+    quote_type: Optional[str] = Query(
+        None, description="金句类型过滤（哲理句/经典台词/情感金句/励志金句/讽刺金句）"
+    ),
     book_name: Optional[str] = Query(None, description="限定书名"),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
@@ -973,8 +1199,15 @@ def search_quotes(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
 
-    cols = ["id", "book_name", "chapter_id", "quote_text",
-            "context", "technique_analysis", "quote_type"]
+    cols = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "quote_text",
+        "context",
+        "technique_analysis",
+        "quote_type",
+    ]
     results = [dict(zip(cols, r)) for r in rows]
 
     # 语义搜索
@@ -990,13 +1223,28 @@ def search_quotes(
         )
         if chroma_res and chroma_res.get("ids"):
             for i, doc_id in enumerate(chroma_res["ids"][0]):
-                semantic_results.append({
-                    "id": doc_id,
-                    "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                    "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                })
+                semantic_results.append(
+                    {
+                        "id": doc_id,
+                        "text": (
+                            chroma_res["documents"][0][i]
+                            if chroma_res.get("documents")
+                            else ""
+                        ),
+                        "metadata": (
+                            chroma_res["metadatas"][0][i]
+                            if chroma_res.get("metadatas")
+                            else {}
+                        ),
+                    }
+                )
 
-    _log_search("default", "quotes", query or quote_type or "", len(results) + len(semantic_results))
+    _log_search(
+        "default",
+        "quotes",
+        query or quote_type or "",
+        len(results) + len(semantic_results),
+    )
     return {
         "success": True,
         "data": {
@@ -1009,7 +1257,10 @@ def search_quotes(
 
 # ===================== 内部辅助函数 =====================
 
-def _log_search(project_name: str, search_type: str, query_text: str, result_count: int):
+
+def _log_search(
+    project_name: str, search_type: str, query_text: str, result_count: int
+):
     """记录搜索历史"""
     try:
         db = get_db_manager()
@@ -1018,9 +1269,15 @@ def _log_search(project_name: str, search_type: str, query_text: str, result_cou
         now = datetime.now().isoformat()
         cursor.execute(
             "INSERT INTO search_logs VALUES (?,?,?,?,?,?,?)",
-            (log_id, project_name, search_type,
-             query_text[:500] if query_text else "",
-             "", result_count, now),
+            (
+                log_id,
+                project_name,
+                search_type,
+                query_text[:500] if query_text else "",
+                "",
+                result_count,
+                now,
+            ),
         )
         db.commit()
     except Exception:
@@ -1029,10 +1286,13 @@ def _log_search(project_name: str, search_type: str, query_text: str, result_cou
 
 # ===================== 知识图谱扩展查询 =====================
 
+
 @router.get("/graph/character-relations")
 def query_character_relations(
     book_name: str = Query(..., description="书名"),
-    character_name: Optional[str] = Query(None, description="人物名称（可选，精确匹配）"),
+    character_name: Optional[str] = Query(
+        None, description="人物名称（可选，精确匹配）"
+    ),
 ):
     """
     知识图谱：人物关系查询
@@ -1043,7 +1303,7 @@ def query_character_relations(
     try:
         graph_mgr = get_graph_manager()
         graph = graph_mgr.load()
-        
+
         # 查找人物节点
         char_nodes = []
         for node_id, attrs in graph.nodes(data=True):
@@ -1055,21 +1315,23 @@ def query_character_relations(
                             char_nodes.append(node_id)
                     else:
                         char_nodes.append(node_id)
-        
+
         # 提取人物之间的边
         relations = []
         for node in char_nodes:
             for neighbor in graph.successors(node):
                 if neighbor in char_nodes:
                     edge_data = graph[node][neighbor]
-                    relations.append({
-                        "source": node,
-                        "target": neighbor,
-                        "relation_type": edge_data.get("relation_type", "unknown"),
-                        "relation_strength": edge_data.get("strength", 0),
-                        "attributes": dict(edge_data),
-                    })
-        
+                    relations.append(
+                        {
+                            "source": node,
+                            "target": neighbor,
+                            "relation_type": edge_data.get("relation_type", "unknown"),
+                            "relation_strength": edge_data.get("strength", 0),
+                            "attributes": dict(edge_data),
+                        }
+                    )
+
         return {
             "success": True,
             "data": {
@@ -1090,7 +1352,9 @@ def query_character_relations(
 @router.get("/graph/plot-lines")
 def query_plot_lines(
     book_name: str = Query(..., description="书名"),
-    line_type: Optional[str] = Query(None, description="剧情线类型（main/subplot/romance/mystery）"),
+    line_type: Optional[str] = Query(
+        None, description="剧情线类型（main/subplot/romance/mystery）"
+    ),
 ):
     """
     知识图谱：剧情线查询
@@ -1101,7 +1365,7 @@ def query_plot_lines(
     try:
         graph_mgr = get_graph_manager()
         graph = graph_mgr.load()
-        
+
         # 查找剧情线节点
         plot_nodes = []
         for node_id, attrs in graph.nodes(data=True):
@@ -1111,16 +1375,20 @@ def query_plot_lines(
                     node_line_type = attrs.get("line_type", "")
                     if line_type:
                         if line_type == node_line_type:
-                            plot_nodes.append({
+                            plot_nodes.append(
+                                {
+                                    "node_id": node_id,
+                                    "attributes": dict(attrs),
+                                }
+                            )
+                    else:
+                        plot_nodes.append(
+                            {
                                 "node_id": node_id,
                                 "attributes": dict(attrs),
-                            })
-                    else:
-                        plot_nodes.append({
-                            "node_id": node_id,
-                            "attributes": dict(attrs),
-                        })
-        
+                            }
+                        )
+
         return {
             "success": True,
             "data": {
@@ -1141,12 +1409,15 @@ def query_plot_lines(
 
 class EnhanceRequest(BaseModel):
     """通用增强请求"""
+
     document_type: str = Field(
         ...,
         description="文档类型: world_setting/character_profile/outline/chapter_outline/chapter_text/writing_style",
     )
     content: str = Field(..., description="AI 生成的文档内容")
-    genre: str = Field(default="", description="小说类型/题材（如：玄幻/都市/悬疑/言情）")
+    genre: str = Field(
+        default="", description="小说类型/题材（如：玄幻/都市/悬疑/言情）"
+    )
     specific_needs: str = Field(
         default="",
         description="具体需求描述（如：世界观缺少力量体系/人物动机不够深刻/大纲节奏太平均）",
@@ -1156,6 +1427,7 @@ class EnhanceRequest(BaseModel):
 
 class ContextSearchRequest(BaseModel):
     """上下文感知搜索请求"""
+
     creation_stage: str = Field(
         ...,
         description="当前创作阶段: world_building/character_design/outlining/chapter_outlining/writing/polishing",
@@ -1194,7 +1466,7 @@ def enhance_document(req: EnhanceRequest):
         raise HTTPException(
             status_code=400,
             detail=f"不支持的文档类型: {req.document_type}。"
-                   f"支持的类型: {', '.join(DOC_TYPE_DIMENSION_MAP.keys())}",
+            f"支持的类型: {', '.join(DOC_TYPE_DIMENSION_MAP.keys())}",
         )
 
     results = {"primary": [], "secondary": [], "cross_book_patterns": []}
@@ -1207,14 +1479,24 @@ def enhance_document(req: EnhanceRequest):
     for collection_name in doc_config["primary_collections"]:
         try:
             chroma_res = chroma.query(
-                collection_name, query_texts=[query_text], n_results=req.limit,
+                collection_name,
+                query_texts=[query_text],
+                n_results=req.limit,
             )
             if chroma_res and chroma_res.get("ids"):
                 for i, doc_id in enumerate(chroma_res["ids"][0]):
                     item = {
                         "id": doc_id,
-                        "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                        "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
+                        "text": (
+                            chroma_res["documents"][0][i]
+                            if chroma_res.get("documents")
+                            else ""
+                        ),
+                        "metadata": (
+                            chroma_res["metadatas"][0][i]
+                            if chroma_res.get("metadatas")
+                            else {}
+                        ),
                         "source": "semantic",
                     }
                     results["primary"].append(item)
@@ -1224,7 +1506,10 @@ def enhance_document(req: EnhanceRequest):
     # 2. SQL 补充主要维度
     for table_name in doc_config["primary_tables"]:
         try:
-            columns = [r[1] for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            columns = [
+                r[1]
+                for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+            ]
             if not columns:
                 continue
             sql = f"SELECT * FROM {table_name} WHERE 1=1"
@@ -1237,7 +1522,9 @@ def enhance_document(req: EnhanceRequest):
             for row in cursor.fetchall():
                 row_dict = dict(zip(columns, row))
                 row_id = row_dict.get("id", "")
-                if row_id and not any(r.get("id") == row_id for r in results["primary"]):
+                if row_id and not any(
+                    r.get("id") == row_id for r in results["primary"]
+                ):
                     row_dict["source"] = "structured"
                     results["primary"].append(row_dict)
         except Exception:
@@ -1246,7 +1533,10 @@ def enhance_document(req: EnhanceRequest):
     # 3. 次要维度补充
     for table_name in doc_config.get("secondary_tables", []):
         try:
-            columns = [r[1] for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            columns = [
+                r[1]
+                for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+            ]
             if not columns:
                 continue
             sql = f"SELECT * FROM {table_name} WHERE 1=1"
@@ -1269,14 +1559,18 @@ def enhance_document(req: EnhanceRequest):
             "SELECT comparison_dimension, common_patterns_json, best_practices FROM cross_book_comparisons LIMIT 5"
         )
         for row in cursor.fetchall():
-            results["cross_book_patterns"].append({
-                "dimension": row[0], "common_patterns": row[1], "best_practices": row[2],
-            })
+            results["cross_book_patterns"].append(
+                {
+                    "dimension": row[0],
+                    "common_patterns": row[1],
+                    "best_practices": row[2],
+                }
+            )
     except Exception:
         pass
 
-    results["primary"] = results["primary"][:req.limit]
-    results["secondary"] = results["secondary"][:req.limit // 2]
+    results["primary"] = results["primary"][: req.limit]
+    results["secondary"] = results["secondary"][: req.limit // 2]
 
     return {
         "success": True,
@@ -1304,7 +1598,7 @@ def context_aware_search(req: ContextSearchRequest):
         raise HTTPException(
             status_code=400,
             detail=f"不支持的创作阶段: {req.creation_stage}。"
-                   f"支持的阶段: {', '.join(STAGE_DIMENSION_MAP.keys())}",
+            f"支持的阶段: {', '.join(STAGE_DIMENSION_MAP.keys())}",
         )
 
     db = get_db_manager()
@@ -1315,27 +1609,48 @@ def context_aware_search(req: ContextSearchRequest):
     if req.focus_aspect:
         query_text = f"{req.focus_aspect} {query_text}"
     if not query_text.strip():
-        raise HTTPException(status_code=400, detail="请提供 current_content 或 focus_aspect")
+        raise HTTPException(
+            status_code=400, detail="请提供 current_content 或 focus_aspect"
+        )
 
-    results = {"vectors": [], "structured": [], "stage_description": stage_config["description"]}
+    results = {
+        "vectors": [],
+        "structured": [],
+        "stage_description": stage_config["description"],
+    }
 
     for collection_name in stage_config["collections"]:
         try:
-            chroma_res = chroma.query(collection_name, query_texts=[query_text], n_results=req.limit)
+            chroma_res = chroma.query(
+                collection_name, query_texts=[query_text], n_results=req.limit
+            )
             if chroma_res and chroma_res.get("ids"):
                 for i, doc_id in enumerate(chroma_res["ids"][0]):
-                    results["vectors"].append({
-                        "id": doc_id,
-                        "text": chroma_res["documents"][0][i] if chroma_res.get("documents") else "",
-                        "metadata": chroma_res["metadatas"][0][i] if chroma_res.get("metadatas") else {},
-                        "collection": collection_name,
-                    })
+                    results["vectors"].append(
+                        {
+                            "id": doc_id,
+                            "text": (
+                                chroma_res["documents"][0][i]
+                                if chroma_res.get("documents")
+                                else ""
+                            ),
+                            "metadata": (
+                                chroma_res["metadatas"][0][i]
+                                if chroma_res.get("metadatas")
+                                else {}
+                            ),
+                            "collection": collection_name,
+                        }
+                    )
         except Exception:
             pass
 
     for table_name in stage_config["tables"]:
         try:
-            columns = [r[1] for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            columns = [
+                r[1]
+                for r in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+            ]
             if not columns:
                 continue
             sql = f"SELECT * FROM {table_name} WHERE 1=1"
@@ -1352,8 +1667,8 @@ def context_aware_search(req: ContextSearchRequest):
         except Exception:
             pass
 
-    results["vectors"] = results["vectors"][:req.limit]
-    results["structured"] = results["structured"][:req.limit]
+    results["vectors"] = results["vectors"][: req.limit]
+    results["structured"] = results["structured"][: req.limit]
     return {"success": True, "data": results}
 
 
@@ -1384,11 +1699,16 @@ def query_patterns(
         sql += f" ORDER BY created_at DESC LIMIT {limit}"
         cursor.execute(sql, params)
         for row in cursor.fetchall():
-            results.append({
-                "dimension": row[0], "books_analyzed": row[1],
-                "common_patterns": row[2], "unique_features": row[3],
-                "best_practices": row[4], "created_at": row[5],
-            })
+            results.append(
+                {
+                    "dimension": row[0],
+                    "books_analyzed": row[1],
+                    "common_patterns": row[2],
+                    "unique_features": row[3],
+                    "best_practices": row[4],
+                    "created_at": row[5],
+                }
+            )
     except Exception:
         pass
 
@@ -1401,16 +1721,29 @@ def query_patterns(
         sql2 += f" LIMIT {limit}"
         cursor.execute(sql2, params2)
         for row in cursor.fetchall():
-            results.append({
-                "type": "technique_combination", "scene_type": row[0],
-                "combo_name": row[1], "technique_sequence": row[2],
-                "applicable_scenarios": row[3], "variations": row[4],
-                "benchmark_book": row[5], "original_example": row[6],
-            })
+            results.append(
+                {
+                    "type": "technique_combination",
+                    "scene_type": row[0],
+                    "combo_name": row[1],
+                    "technique_sequence": row[2],
+                    "applicable_scenarios": row[3],
+                    "variations": row[4],
+                    "benchmark_book": row[5],
+                    "original_example": row[6],
+                }
+            )
     except Exception:
         pass
 
-    return {"success": True, "data": {"pattern_type": pattern_type, "total_results": len(results), "results": results[:limit]}}
+    return {
+        "success": True,
+        "data": {
+            "pattern_type": pattern_type,
+            "total_results": len(results),
+            "results": results[:limit],
+        },
+    }
 
 
 @router.get("/benchmarks/{dimension}")
@@ -1423,8 +1756,12 @@ def query_patterns(
 def query_story_events(
     book_name: str,
     chapter_range: Optional[str] = Query(None, description="章节范围过滤（如：1-100）"),
-    event_type: Optional[str] = Query(None, description="事件类型过滤（如：伏笔埋设/冲突爆发/高潮）"),
-    significance: Optional[str] = Query(None, description="重要性过滤（high/medium/low）"),
+    event_type: Optional[str] = Query(
+        None, description="事件类型过滤（如：伏笔埋设/冲突爆发/高潮）"
+    ),
+    significance: Optional[str] = Query(
+        None, description="重要性过滤（high/medium/low）"
+    ),
     limit: int = Query(100, ge=1, le=500),
 ):
     """
@@ -1448,7 +1785,16 @@ def query_story_events(
     # 不使用 SQL LIMIT，在 Python 侧过滤后再截断（解决 chapter_range 过滤顺序问题）
     sql += " ORDER BY chapter_id"
 
-    columns = ["id", "book_name", "chapter_id", "event_name", "event_summary", "event_type", "characters_involved", "significance"]
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "event_name",
+        "event_summary",
+        "event_type",
+        "characters_involved",
+        "significance",
+    ]
 
     try:
         cursor.execute(sql, params)
@@ -1468,6 +1814,7 @@ def query_story_events(
                 start, end = chapter_range.split("-")
                 start, end = int(start), int(end)
                 import re
+
                 filtered = []
                 for event in events:
                     match = re.search(r"(\d+)", event.get("chapter_id", ""))
@@ -1481,15 +1828,20 @@ def query_story_events(
 
         # 按章节编号数值排序（解决字符串排序 "第10章" < "第2章" 的问题）
         import re as _re
+
         def _chapter_num(e):
             m = _re.search(r"(\d+)", e.get("chapter_id", ""))
             return int(m.group(1)) if m else 99999
+
         events.sort(key=_chapter_num)
 
         # 过滤后再截断
         events = events[:limit]
 
-        return {"success": True, "data": {"book_name": book_name, "total": len(events), "events": events}}
+        return {
+            "success": True,
+            "data": {"book_name": book_name, "total": len(events), "events": events},
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -1499,7 +1851,9 @@ def query_causal_chain(
     book_name: str,
     event_name: Optional[str] = Query(None, description="起始事件名称（精确匹配）"),
     depth: int = Query(3, ge=1, le=10, description="遍历深度"),
-    direction: Optional[str] = Query("downstream", description="方向：downstream/upstream/both"),
+    direction: Optional[str] = Query(
+        "downstream", description="方向：downstream/upstream/both"
+    ),
 ):
     """
     查询事件因果链
@@ -1511,7 +1865,16 @@ def query_causal_chain(
 
     # 加载该书所有事件
     cursor.execute("SELECT * FROM story_events WHERE book_name = ?", (book_name,))
-    event_columns = ["id", "book_name", "chapter_id", "event_name", "event_summary", "event_type", "characters_involved", "significance"]
+    event_columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "event_name",
+        "event_summary",
+        "event_type",
+        "characters_involved",
+        "significance",
+    ]
     all_events = {}
     for row in cursor.fetchall():
         event = dict(zip(event_columns, row))
@@ -1519,17 +1882,28 @@ def query_causal_chain(
 
     # 加载该书所有因果边
     cursor.execute("SELECT * FROM event_causal_edges WHERE book_name = ?", (book_name,))
-    edge_columns = ["id", "book_name", "source_event_id", "target_event_id", "relation_type", "relation_detail"]
+    edge_columns = [
+        "id",
+        "book_name",
+        "source_event_id",
+        "target_event_id",
+        "relation_type",
+        "relation_detail",
+    ]
     edges = [dict(zip(edge_columns, row)) for row in cursor.fetchall()]
 
     # 构建邻接表
     downstream = {}  # event_id -> [(target_id, relation_type, detail)]
-    upstream = {}    # event_id -> [(source_id, relation_type, detail)]
+    upstream = {}  # event_id -> [(source_id, relation_type, detail)]
     for edge in edges:
         src = edge["source_event_id"]
         tgt = edge["target_event_id"]
-        downstream.setdefault(src, []).append((tgt, edge["relation_type"], edge["relation_detail"]))
-        upstream.setdefault(tgt, []).append((src, edge["relation_type"], edge["relation_detail"]))
+        downstream.setdefault(src, []).append(
+            (tgt, edge["relation_type"], edge["relation_detail"])
+        )
+        upstream.setdefault(tgt, []).append(
+            (src, edge["relation_type"], edge["relation_detail"])
+        )
 
     # 找到起始事件
     start_event_id = None
@@ -1542,7 +1916,9 @@ def query_causal_chain(
             return {"success": False, "error": f"未找到事件: {event_name}"}
     else:
         # 没有指定起始事件，返回所有高重要性事件的因果链概览
-        high_events = [e for e in all_events.values() if e.get("significance") == "high"]
+        high_events = [
+            e for e in all_events.values() if e.get("significance") == "high"
+        ]
         return {
             "success": True,
             "data": {
@@ -1550,7 +1926,11 @@ def query_causal_chain(
                 "total_events": len(all_events),
                 "total_edges": len(edges),
                 "high_significance_events": [
-                    {"event_name": e["event_name"], "chapter_id": e["chapter_id"], "event_type": e["event_type"]}
+                    {
+                        "event_name": e["event_name"],
+                        "chapter_id": e["chapter_id"],
+                        "event_type": e["event_type"],
+                    }
                     for e in high_events[:50]
                 ],
             },
@@ -1566,39 +1946,45 @@ def query_causal_chain(
         visited.add(event_id)
 
         event = all_events.get(event_id, {})
-        chain.append({
-            "depth": current_depth,
-            "direction": direction_label,
-            "event_name": event.get("event_name", ""),
-            "event_summary": event.get("event_summary", ""),
-            "chapter_id": event.get("chapter_id", ""),
-            "event_type": event.get("event_type", ""),
-        })
+        chain.append(
+            {
+                "depth": current_depth,
+                "direction": direction_label,
+                "event_name": event.get("event_name", ""),
+                "event_summary": event.get("event_summary", ""),
+                "chapter_id": event.get("chapter_id", ""),
+                "event_type": event.get("event_type", ""),
+            }
+        )
 
         if direction in ("downstream", "both"):
             for tgt_id, rel_type, rel_detail in downstream.get(event_id, []):
                 tgt_event = all_events.get(tgt_id, {})
-                chain.append({
-                    "depth": current_depth + 1,
-                    "direction": "downstream",
-                    "relation_type": rel_type,
-                    "relation_detail": rel_detail,
-                    "target_event_name": tgt_event.get("event_name", ""),
-                    "target_chapter_id": tgt_event.get("chapter_id", ""),
-                })
+                chain.append(
+                    {
+                        "depth": current_depth + 1,
+                        "direction": "downstream",
+                        "relation_type": rel_type,
+                        "relation_detail": rel_detail,
+                        "target_event_name": tgt_event.get("event_name", ""),
+                        "target_chapter_id": tgt_event.get("chapter_id", ""),
+                    }
+                )
                 traverse(tgt_id, current_depth + 1, "downstream")
 
         if direction in ("upstream", "both"):
             for src_id, rel_type, rel_detail in upstream.get(event_id, []):
                 src_event = all_events.get(src_id, {})
-                chain.append({
-                    "depth": current_depth + 1,
-                    "direction": "upstream",
-                    "relation_type": rel_type,
-                    "relation_detail": rel_detail,
-                    "target_event_name": src_event.get("event_name", ""),
-                    "target_chapter_id": src_event.get("chapter_id", ""),
-                })
+                chain.append(
+                    {
+                        "depth": current_depth + 1,
+                        "direction": "upstream",
+                        "relation_type": rel_type,
+                        "relation_detail": rel_detail,
+                        "target_event_name": src_event.get("event_name", ""),
+                        "target_chapter_id": src_event.get("chapter_id", ""),
+                    }
+                )
                 traverse(src_id, current_depth + 1, "upstream")
 
     traverse(start_event_id, 0, "start")
@@ -1634,6 +2020,7 @@ def get_anti_ai_patterns():
     global _anti_ai_cache
     if _anti_ai_cache is None:
         import os
+
         data_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "data",
@@ -1657,4 +2044,3 @@ def get_genre_rules(
 ):
     """查询该题材的裁决规则（genre_rules表已废弃）"""
     return {"success": True, "data": [], "total": 0}
-

@@ -1,6 +1,7 @@
 """
 写作风格查询接口
 """
+
 import json
 from typing import Optional
 from fastapi import APIRouter, Query
@@ -14,21 +15,30 @@ router = APIRouter()
 @router.get("/fingerprint")
 def get_style_fingerprint(
     book_name: Optional[str] = Query(None, description="书名"),
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：文风特点/叙事风格）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：文风特点/叙事风格）"
+    ),
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
 ):
     """查询文风指纹 - 支持混合检索"""
-    columns = ["id", "book_name", "category", "verbs", "adjectives",
-               "imagery", "transitions",
-               "narrative_perspective", "sentence_rhythm"]
-    
+    columns = [
+        "id",
+        "book_name",
+        "category",
+        "verbs",
+        "adjectives",
+        "imagery",
+        "transitions",
+        "narrative_perspective",
+        "sentence_rhythm",
+    ]
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
-    
+
     results = hybrid_search(
         table="author_fingerprints",
-        collection="author_fingerprints_kb",
         columns=columns,
         query=query,
         filters=filters,
@@ -39,7 +49,9 @@ def get_style_fingerprint(
     for item in results:
         for field in ["verbs", "adjectives", "imagery", "transitions"]:
             val = item.get(field, "")
-            item[field] = [v.strip() for v in val.split(",") if v.strip()] if val else []
+            item[field] = (
+                [v.strip() for v in val.split(",") if v.strip()] if val else []
+            )
 
     return {"success": True, "data": results, "total": len(results)}
 
@@ -68,8 +80,15 @@ def get_sensory_mappings(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "chapter_id", "category", "emotion",
-               "show_not_tell", "analysis"]
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "category",
+        "emotion",
+        "show_not_tell",
+        "analysis",
+    ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -78,20 +97,32 @@ def get_sensory_mappings(
 @router.get("/dialogue-samples")
 def get_dialogue_samples(
     book_name: Optional[str] = Query(None, description="书名"),
-    scene_type: Optional[str] = Query(None, description="场景类型(争吵/告白/谈判/日常/教导)"),
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：紧张对话/潜台词对话）"),
+    scene_type: Optional[str] = Query(
+        None, description="场景类型(争吵/告白/谈判/日常/教导)"
+    ),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：紧张对话/潜台词对话）"
+    ),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
     """查询对话样本 - 支持混合检索"""
-    columns = ["id", "book_name", "chapter_id", "scene_type",
-               "original_text", "emotional_tension", "subtext", "plot_function"]
-    
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "scene_type",
+        "original_text",
+        "emotional_tension",
+        "subtext",
+        "plot_function",
+    ]
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
     if scene_type:
         filters["scene_type"] = scene_type
-    
+
     results = hybrid_search(
         table="dialogue_samples",
         collection="dialogue_samples_kb",
@@ -107,20 +138,31 @@ def get_dialogue_samples(
 @router.get("/description-samples")
 def get_description_samples(
     book_name: Optional[str] = Query(None, description="书名"),
-    description_type: Optional[str] = Query(None, description="描写类型(打斗/环境/心理/外貌/细节)"),
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：环境描写/心理描写）"),
+    description_type: Optional[str] = Query(
+        None, description="描写类型(打斗/环境/心理/外貌/细节)"
+    ),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：环境描写/心理描写）"
+    ),
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
 ):
     """查询描写样本 - 支持混合检索"""
-    columns = ["id", "book_name", "chapter_id", "description_type",
-               "original_text", "technique_analysis", "sensory_details"]
-    
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "description_type",
+        "original_text",
+        "technique_analysis",
+        "sensory_details",
+    ]
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
     if description_type:
         filters["description_type"] = description_type
-    
+
     results = hybrid_search(
         table="description_samples",
         collection="description_samples_kb",
@@ -161,8 +203,17 @@ def get_narrative_skills(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "chapter_id", "category", "scene_type",
-               "skill_name", "analysis", "original_example", "tags"]
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "category",
+        "scene_type",
+        "skill_name",
+        "analysis",
+        "original_example",
+        "tags",
+    ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -192,8 +243,14 @@ def get_transition_samples(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "chapter_id", "transition_type",
-               "original_text", "technique_analysis"]
+    columns = [
+        "id",
+        "book_name",
+        "chapter_id",
+        "transition_type",
+        "original_text",
+        "technique_analysis",
+    ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -202,7 +259,9 @@ def get_transition_samples(
 @router.get("/summaries")
 def get_style_summaries(
     book_name: Optional[str] = Query(None, description="书名"),
-    summary_type: Optional[str] = Query(None, description="总结类型(dialogue/description/transition)"),
+    summary_type: Optional[str] = Query(
+        None, description="总结类型(dialogue/description/transition)"
+    ),
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
 ):
     """查询风格总结"""
@@ -223,8 +282,15 @@ def get_style_summaries(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "category", "summary_type",
-               "scene_or_desc_type", "style_description", "key_features"]
+    columns = [
+        "id",
+        "book_name",
+        "category",
+        "summary_type",
+        "scene_or_desc_type",
+        "style_description",
+        "key_features",
+    ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -243,11 +309,21 @@ def get_book_statistics(
     )
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "total_words", "avg_chapter_words",
-               "min_chapter_words", "max_chapter_words", "median_chapter_words",
-               "dialogue_ratio", "description_ratio", "avg_paragraph_length",
-               "short_para_ratio", "medium_para_ratio", "long_para_ratio",
-               ]
+    columns = [
+        "id",
+        "book_name",
+        "total_words",
+        "avg_chapter_words",
+        "min_chapter_words",
+        "max_chapter_words",
+        "median_chapter_words",
+        "dialogue_ratio",
+        "description_ratio",
+        "avg_paragraph_length",
+        "short_para_ratio",
+        "medium_para_ratio",
+        "long_para_ratio",
+    ]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -277,8 +353,7 @@ def get_narrative_distance(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "chapter_id", "distance_type",
-               "trigger_reason"]
+    columns = ["id", "book_name", "chapter_id", "distance_type", "trigger_reason"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}
@@ -308,8 +383,7 @@ def get_show_tell_patterns(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    columns = ["id", "book_name", "chapter_id", "pattern_type",
-               "switching_triggers"]
+    columns = ["id", "book_name", "chapter_id", "pattern_type", "switching_triggers"]
     results = [dict(zip(columns, row)) for row in rows]
 
     return {"success": True, "data": results, "total": len(results)}

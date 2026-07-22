@@ -1,6 +1,7 @@
 """
 人物查询接口
 """
+
 import json
 from typing import Optional
 from fastapi import APIRouter, Query
@@ -13,7 +14,9 @@ router = APIRouter()
 
 @router.get("/profile")
 def get_character_profile(
-    query: Optional[str] = Query(None, description="语义搜索关键词（如：反派设计/导师型角色）"),
+    query: Optional[str] = Query(
+        None, description="语义搜索关键词（如：反派设计/导师型角色）"
+    ),
     book_name: Optional[str] = Query(None, description="书名"),
     character_name: Optional[str] = Query(None, description="人物名"),
     role_type: Optional[str] = Query(None, description="角色定位"),
@@ -21,15 +24,31 @@ def get_character_profile(
 ):
     """查询人物档案（混合检索）"""
     columns = [
-        "id", "book_name", "author", "category", "name", "role_type",
-        "appearance", "quirks", "identity", "motivation", "internal_conflict",
-        "personality", "relation_to_mc",
-        "relations_to_others", "climax_or_fate", "background",
-                "speech_samples", "behavior_samples",
-        "relationship_evolution", "abilities", "internal_dilemma",
-        "transformation_trigger", "contrast_design",
+        "id",
+        "book_name",
+        "author",
+        "category",
+        "name",
+        "role_type",
+        "appearance",
+        "quirks",
+        "identity",
+        "motivation",
+        "internal_conflict",
+        "personality",
+        "relation_to_mc",
+        "relations_to_others",
+        "climax_or_fate",
+        "background",
+        "speech_samples",
+        "behavior_samples",
+        "relationship_evolution",
+        "abilities",
+        "internal_dilemma",
+        "transformation_trigger",
+        "contrast_design",
     ]
-    
+
     filters = {}
     if book_name:
         filters["book_name"] = book_name
@@ -37,7 +56,7 @@ def get_character_profile(
         filters["name"] = character_name
     if role_type:
         filters["role_type"] = role_type
-    
+
     results = hybrid_search(
         table="character_profiles",
         collection="character_profiles_kb",
@@ -46,7 +65,7 @@ def get_character_profile(
         filters=filters,
         limit=limit,
     )
-    
+
     return {"success": True, "data": results, "total": len(results)}
 
 
@@ -56,14 +75,21 @@ def get_speech_style(
     character_name: Optional[str] = Query(None, description="人物名"),
 ):
     """查询人物语言风格"""
-    columns = ["id", "book_name", "character_name", "catchphrases",
-               "vocabulary_preference", "sentence_pattern",
-               "tone_contexts_json", "dialogue_samples_json"]
-    
+    columns = [
+        "id",
+        "book_name",
+        "character_name",
+        "catchphrases",
+        "vocabulary_preference",
+        "sentence_pattern",
+        "tone_contexts_json",
+        "dialogue_samples_json",
+    ]
+
     filters = {"book_name": book_name}
     if character_name:
         filters["character_name"] = character_name
-    
+
     results = hybrid_search(
         table="character_speech_style",
         collection="character_speech_style_kb",
@@ -72,7 +98,7 @@ def get_speech_style(
         filters=filters,
         limit=100,
     )
-    
+
     # 解析 JSON 字段
     for item in results:
         try:
@@ -80,7 +106,9 @@ def get_speech_style(
         except Exception:
             item["tone_contexts"] = {}
         try:
-            item["dialogue_samples"] = json.loads(item.get("dialogue_samples_json", "[]"))
+            item["dialogue_samples"] = json.loads(
+                item.get("dialogue_samples_json", "[]")
+            )
         except Exception:
             item["dialogue_samples"] = []
 
@@ -93,26 +121,34 @@ def get_behavior_marks(
     character_name: Optional[str] = Query(None, description="人物名"),
 ):
     """查询人物行为标志"""
-    columns = ["id", "book_name", "character_name", "habitual_actions",
-               "micro_expressions", "defense_mechanisms", "behavior_samples_json"]
-    
+    columns = [
+        "id",
+        "book_name",
+        "character_name",
+        "habitual_actions",
+        "micro_expressions",
+        "defense_mechanisms",
+        "behavior_samples_json",
+    ]
+
     filters = {"book_name": book_name}
     if character_name:
         filters["character_name"] = character_name
-    
+
     results = hybrid_search(
         table="character_behavior_marks",
-        collection="character_behavior_kb",
         columns=columns,
         query=None,
         filters=filters,
         limit=100,
     )
-    
+
     # 解析 JSON 字段
     for item in results:
         try:
-            item["behavior_samples"] = json.loads(item.get("behavior_samples_json", "[]"))
+            item["behavior_samples"] = json.loads(
+                item.get("behavior_samples_json", "[]")
+            )
         except Exception:
             item["behavior_samples"] = []
 
@@ -176,10 +212,16 @@ def search_characters(
     items = []
     if results and results.get("ids"):
         for i, doc_id in enumerate(results["ids"][0]):
-            items.append({
-                "id": doc_id,
-                "text": results["documents"][0][i] if results.get("documents") else "",
-                "metadata": results["metadatas"][0][i] if results.get("metadatas") else {},
-            })
+            items.append(
+                {
+                    "id": doc_id,
+                    "text": (
+                        results["documents"][0][i] if results.get("documents") else ""
+                    ),
+                    "metadata": (
+                        results["metadatas"][0][i] if results.get("metadatas") else {}
+                    ),
+                }
+            )
 
     return {"success": True, "data": items, "total": len(items)}
