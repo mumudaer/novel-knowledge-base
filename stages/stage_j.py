@@ -133,12 +133,8 @@ class StageJ(BaseStage):
                 for row in desc_rows:
                     book_data.append(f"  类型:{row[0]} | 技法:{row[2]}\n  原文:{row[1][:200]}")
 
-            # 检索章节模式
-            cursor.execute(
-
-                (book_name,),
-            )
-            pattern_rows = cursor.fetchall()
+            # 检索章节模式（chapter_patterns 表已废弃）
+            pattern_rows = []
             if pattern_rows:
                 book_data.append(f"【章节模式】开头:{pattern_rows[0][0]} | 结尾:{pattern_rows[0][1]} | 转场:{pattern_rows[0][2]}")
 

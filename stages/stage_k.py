@@ -150,10 +150,7 @@ class StageK(BaseStage):
                 book_info.append(f"人物: {', '.join(chars)}")
 
             # 获取全书结构
-            cursor.execute(
-
-                (book_name,),
-            )
+            # book_structure table deleted, skip
             bs_row = cursor.fetchone()
             if bs_row:
                 book_info.append(f"结构: {bs_row[0]} | 表层主题: {bs_row[1]} | 深层主题: {bs_row[2]}")

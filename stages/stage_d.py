@@ -531,11 +531,7 @@ class StageD(BaseStage):
         for ws in results.get("world_settings", []):
             chroma_item = {**ws}  # 浅拷贝，避免修改原始字典
             chroma_item["_chroma_text"] = (
-                f"模块:{ws['module']}\n实体:{ws['entity']}\n设定:{ws['content']}\n"
-                f"日常生活:{ws.get('daily_life', '')}\n禁忌:{ws.get('taboos', '')}\n"
-                f"冲突根源:{ws.get('conflict_roots', '')}\n地理:{ws.get('geography', '')}\n"
-                f"经济:{ws.get('economy', '')}\n文化:{ws.get('culture', '')}\n"
-                f"因果链:{ws.get('causal_chain', '')}"
+                f"模块:{ws['module']}\n实体:{ws['entity']}\n设定:{ws['content']}"
             )
             chroma_world_items.append(chroma_item)
         bulk_upsert_to_chroma(

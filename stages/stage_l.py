@@ -214,18 +214,8 @@ class StageL(BaseStage):
             
             # 根据维度收集相关数据
             if comparison_dimension == "感情线设计":
-                cursor.execute(
-
-                    (book_name,),
-                )
-                for row in cursor.fetchall():
-                    stages = json.loads(row[3]) if row[3] else []
-                    book_data_parts.append(
-                        f"CP: {row[0]} & {row[1]} | 类型: {row[2]} | "
-                        f"发展阶段: {len(stages)}个 | "
-                        f"甜点: {json.loads(row[4]) if row[4] else []} | "
-                        f"虐点: {json.loads(row[5]) if row[5] else []}"
-                    )
+                # romance_lines 表已废弃
+                book_data_parts.append("感情线: 数据已废弃")
             
             elif comparison_dimension == "高潮铺垫方式":
                 cursor.execute(
@@ -300,19 +290,8 @@ class StageL(BaseStage):
                     )
             
             elif comparison_dimension == "结构编排":
-                cursor.execute(
-
-                    (book_name,),
-                )
-                row = cursor.fetchone()
-                if row:
-                    acts = json.loads(row[1]) if row[1] else []
-                    book_data_parts.append(
-                        f"结构类型: {row[0]} | "
-                        f"幕次: {len(acts)}幕 | "
-                        f"表层主题: {row[2]} | "
-                        f"深层主题: {row[3]}"
-                    )
+                # book_structure 表已废弃
+                book_data_parts.append("结构: 数据已废弃")
             
             elif comparison_dimension == "信息管理":
                 cursor.execute(
