@@ -577,32 +577,41 @@ class StageD(BaseStage):
         # 人物档案入库（33个字段）
         for cp in results.get("character_profiles", []):
             cp_id = generate_id(cp["book_name"], cp["name"], "profile")
+
+            def _str(v):
+                """确保 SQLite 兼容：list→json.dumps，非str→str"""
+                if isinstance(v, list):
+                    return json.dumps(v, ensure_ascii=False)
+                if isinstance(v, dict):
+                    return json.dumps(v, ensure_ascii=False)
+                return str(v) if v is not None else ""
+
             cursor.execute(
                 "INSERT OR REPLACE INTO character_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     cp_id,
-                    cp["book_name"],
-                    cp["author"],
-                    cp["category"],
-                    cp["name"],
-                    cp.get("role_type", "未知"),
-                    cp.get("appearance", ""),
-                    cp.get("quirks", ""),
-                    cp.get("identity", ""),
-                    cp.get("motivation", ""),
-                    cp.get("internal_conflict", ""),
-                    cp.get("personality", ""),
-                    cp.get("relation_to_mc", "未知"),
-                    cp.get("relations_to_others", ""),
-                    cp.get("climax_or_fate", ""),
-                    cp.get("background", ""),
-                    cp.get("speech_samples", ""),
-                    cp.get("behavior_samples", ""),
-                    cp.get("relationship_evolution", ""),
-                    cp.get("abilities", ""),
-                    cp.get("internal_dilemma", ""),
-                    cp.get("transformation_trigger", ""),
-                    cp.get("contrast_design", ""),
+                    _str(cp["book_name"]),
+                    _str(cp["author"]),
+                    _str(cp["category"]),
+                    _str(cp["name"]),
+                    _str(cp.get("role_type", "未知")),
+                    _str(cp.get("appearance", "")),
+                    _str(cp.get("quirks", "")),
+                    _str(cp.get("identity", "")),
+                    _str(cp.get("motivation", "")),
+                    _str(cp.get("internal_conflict", "")),
+                    _str(cp.get("personality", "")),
+                    _str(cp.get("relation_to_mc", "未知")),
+                    _str(cp.get("relations_to_others", "")),
+                    _str(cp.get("climax_or_fate", "")),
+                    _str(cp.get("background", "")),
+                    _str(cp.get("speech_samples", "")),
+                    _str(cp.get("behavior_samples", "")),
+                    _str(cp.get("relationship_evolution", "")),
+                    _str(cp.get("abilities", "")),
+                    _str(cp.get("internal_dilemma", "")),
+                    _str(cp.get("transformation_trigger", "")),
+                    _str(cp.get("contrast_design", "")),
                 ),
             )
             stats["character_profiles"] += 1
