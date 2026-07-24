@@ -34,7 +34,11 @@ def bulk_upsert_to_chroma(
     if not items:
         return 0
 
-    chroma = get_chroma_manager()
+    try:
+        chroma = get_chroma_manager()
+    except Exception as e:
+        logger.warning(f"⚠️ ChromaDB 连接失败: {e}")
+        return 0
     ids = []
     documents = []
     metadatas = []
