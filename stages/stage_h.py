@@ -396,6 +396,11 @@ class StageH(BaseStage):
 
     def insert(self, results: Dict[str, List[Dict]]) -> Dict[str, int]:
         """将 Stage H 结果写入数据库"""
+        def _str(v):
+            if isinstance(v, list): return json.dumps(v, ensure_ascii=False)
+            if isinstance(v, dict): return json.dumps(v, ensure_ascii=False)
+            return str(v) if v is not None else ""
+
         cursor = self.db.connect().cursor()
         stats = {
             "plot_lines": 0,
@@ -412,11 +417,11 @@ class StageH(BaseStage):
                 "INSERT OR REPLACE INTO plot_lines VALUES (?,?,?,?,?,?)",
                 (
                     pl_id,
-                    pl["book_name"],
-                    pl["line_type"],
-                    pl.get("theme", ""),
-                    pl.get("chapter_distribution", ""),
-                    json.dumps(pl.get("milestones", []), ensure_ascii=False),
+                    _str(pl["book_name"]),
+                    _str(pl["line_type"]),
+                    _str(pl.get("theme", "")),
+                    _str(pl.get("chapter_distribution", "")),
+                    _str(pl.get("milestones", [])),
                 ),
             )
             stats["plot_lines"] += 1
